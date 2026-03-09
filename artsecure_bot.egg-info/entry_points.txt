@@ -1,0 +1,2 @@
+[console_scripts]
+artsecure-bot = artsecure_bot.main:run

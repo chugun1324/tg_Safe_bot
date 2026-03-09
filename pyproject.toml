@@ -1,0 +1,35 @@
+[project]
+name = "artsecure-bot"
+version = "0.1.0"
+description = "MVP Telegram bot for secure artist commissions"
+requires-python = ">=3.10"
+dependencies = [
+  "aiogram>=3.4,<4",
+  "SQLAlchemy>=2.0,<3",
+  "aiosqlite>=0.20,<1",
+  "Pillow>=10,<12",
+  "reportlab>=4,<5",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "pytest-asyncio>=0.23,<1",
+]
+
+[project.scripts]
+artsecure-bot = "artsecure_bot.main:run"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
