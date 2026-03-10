@@ -1,21 +1,48 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from artsecure_bot.models import (
     BlacklistEntry,
+    ArtAsset,
     Order,
     OrderStatus,
     Report,
     User,
+    UserLocale,
     UserRole,
 )
 
 
 async def get_user_by_tg_id(session: AsyncSession, tg_id: int) -> User | None:
     query = select(User).where(User.tg_id == tg_id)
+    return await session.scalar(query)
+
+
+async def get_user_language(session: AsyncSession, tg_id: int) -> str:
+    query = select(UserLocale).where(UserLocale.tg_id == tg_id)
+    locale = await session.scalar(query)
+    if locale is None:
+        return "ru"
+    return locale.language
+
+
+async def set_user_language(session: AsyncSession, tg_id: int, language: str) -> None:
+    query = select(UserLocale).where(UserLocale.tg_id == tg_id)
+    locale = await session.scalar(query)
+    if locale is None:
+        locale = UserLocale(tg_id=tg_id, language=language)
+        session.add(locale)
+    else:
+        locale.language = language
+    await session.flush()
+
+
+async def get_user_by_username(session: AsyncSession, username: str) -> User | None:
+    normalized = username.lstrip("@").lower()
+    query = select(User).where(func.lower(User.username) == normalized)
     return await session.scalar(query)
 
 
@@ -107,6 +134,34 @@ async def list_orders_for_user(session: AsyncSession, user: User) -> list[Order]
     return list(rows)
 
 
+async def has_orders_for_customer(session: AsyncSession, customer_id: int) -> bool:
+    total = await session.scalar(select(func.count(Order.id)).where(Order.customer_id == customer_id)) or 0
+    return int(total) > 0
+
+
+async def has_orders_for_artist(session: AsyncSession, artist_id: int) -> bool:
+    total = await session.scalar(select(func.count(Order.id)).where(Order.artist_id == artist_id)) or 0
+    return int(total) > 0
+
+
+async def has_send_art_available_orders(session: AsyncSession, artist_id: int) -> bool:
+    total = await session.scalar(
+        select(func.count(Order.id))
+        .where(Order.artist_id == artist_id)
+        .where(
+            Order.status.in_(
+                [
+                    OrderStatus.IN_PROGRESS,
+                    OrderStatus.PREVIEW_SENT,
+                    OrderStatus.PAID_ESCROW,
+                    OrderStatus.FINAL_REVIEW,
+                ]
+            )
+        )
+    ) or 0
+    return int(total) > 0
+
+
 async def create_report(
     session: AsyncSession,
     reporter_id: int,
@@ -123,6 +178,13 @@ async def create_report(
     session.add(report)
     await session.flush()
     return report
+
+
+async def delete_order_with_related(session: AsyncSession, order_id: int) -> None:
+    await session.execute(delete(ArtAsset).where(ArtAsset.order_id == order_id))
+    await session.execute(delete(Report).where(Report.order_id == order_id))
+    await session.execute(delete(Order).where(Order.id == order_id))
+    await session.flush()
 
 
 async def add_to_blacklist(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from artsecure_bot.models import Base
@@ -18,6 +19,16 @@ async def init_db(database_url: str) -> None:
 
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            result = await conn.execute(text("PRAGMA table_info(orders)"))
+            columns = {row[1] for row in result.fetchall()}
+            if "customer_done" not in columns:
+                await conn.execute(text("ALTER TABLE orders ADD COLUMN customer_done BOOLEAN DEFAULT 0"))
+            if "artist_done" not in columns:
+                await conn.execute(text("ALTER TABLE orders ADD COLUMN artist_done BOOLEAN DEFAULT 0"))
+        except Exception:
+            # Non-SQLite engines should be migrated separately.
+            pass
 
 
 @asynccontextmanager

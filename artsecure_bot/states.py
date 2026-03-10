@@ -8,7 +8,7 @@ class RegistrationState(StatesGroup):
 
 
 class CreateOrderState(StatesGroup):
-    waiting_artist_tg_id = State()
+    waiting_artist_username = State()
     waiting_title = State()
     waiting_details = State()
     waiting_price = State()
@@ -18,6 +18,10 @@ class ReportState(StatesGroup):
     waiting_target_tg_id = State()
     waiting_order_id = State()
     waiting_reason = State()
+
+
+class SearchState(StatesGroup):
+    waiting_query = State()
 
 
 class SendArtState(StatesGroup):

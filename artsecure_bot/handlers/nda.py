@@ -7,8 +7,9 @@ from aiogram.types import BufferedInputFile, Message
 from artsecure_bot.config import Settings
 from artsecure_bot.db import session_scope
 from artsecure_bot.handlers.utils import require_registered_user
+from artsecure_bot.i18n import tr
 from artsecure_bot.services.nda import build_nda_pdf
-from artsecure_bot.services.repository import get_order_by_id
+from artsecure_bot.services.repository import get_order_by_id, get_user_language
 
 router = Router()
 
@@ -22,24 +23,28 @@ def _extract_order_id(message: Message) -> int | None:
 
 @router.message(Command("nda"))
 async def nda_command(message: Message, settings: Settings) -> None:
-    order_id = _extract_order_id(message)
-    if order_id is None:
-        await message.answer("Использование: /nda <order_id>")
+    if message.from_user is None:
         return
 
     async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
+        order_id = _extract_order_id(message)
+        if order_id is None:
+            await message.answer(tr("usage_nda", lang))
+            return
+
         user = await require_registered_user(message, session)
         if user is None:
             return
 
         order = await get_order_by_id(session, order_id)
         if order is None:
-            await message.answer("Заказ не найден.")
+            await message.answer(tr("order_not_found", lang))
             return
 
-        from_admin = message.from_user is not None and message.from_user.id in settings.admin_ids
+        from_admin = message.from_user.id in settings.admin_ids
         if user.id not in {order.customer_id, order.artist_id} and not from_admin:
-            await message.answer("NDA доступен только участникам заказа.")
+            await message.answer(tr("nda_not_available", lang))
             return
 
         pdf_bytes = build_nda_pdf(
@@ -52,6 +57,6 @@ async def nda_command(message: Message, settings: Settings) -> None:
 
     await message.answer_document(
         BufferedInputFile(pdf_bytes, filename=f"nda_order_{order_id}.pdf"),
-        caption="Шаблон NDA сгенерирован. Подпишите и согласуйте условия в чате.",
+        caption=tr("nda_generated", lang),
         protect_content=True,
     )

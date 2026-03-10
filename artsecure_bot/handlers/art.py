@@ -8,53 +8,98 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Document, Message, PhotoSize
 
 from artsecure_bot.db import session_scope
-from artsecure_bot.handlers.utils import require_role
-from artsecure_bot.keyboards import art_kind_keyboard
+from artsecure_bot.handlers.utils import build_main_menu_for_user, require_role
+from artsecure_bot.i18n import tr, variants
+from artsecure_bot.keyboards import art_kind_keyboard, flow_menu
 from artsecure_bot.models import ArtAsset, ArtKind, OrderStatus, UserRole
-from artsecure_bot.services.repository import get_order_by_id
+from artsecure_bot.services.repository import get_order_by_id, get_user_language
 from artsecure_bot.services.watermark import add_text_watermark
-from artsecure_bot.states import SendArtState
+from artsecure_bot.states import RelayState, SendArtState
 
 router = Router()
 
 
 @router.message(Command("send_art"))
+@router.message(F.text.in_(variants("btn_send_art")))
 async def send_art_start(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+
+    current_state = await state.get_state()
+    if current_state == RelayState.waiting_message.state:
+        data = await state.get_data()
+        order_id = data.get("order_id")
+        async with session_scope() as session:
+            artist = await require_role(message, session, UserRole.ARTIST)
+            if artist is None:
+                return
+            lang = await get_user_language(session, artist.tg_id)
+            if not isinstance(order_id, int):
+                await message.answer(tr("relay_session_expired", lang))
+                await state.clear()
+                return
+            order = await get_order_by_id(session, order_id)
+            if order is None:
+                await message.answer(tr("order_not_found", lang))
+                await state.clear()
+                return
+            if order.artist_id != artist.id:
+                await message.answer(tr("send_art_order_not_yours", lang))
+                return
+            if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED}:
+                menu = await build_main_menu_for_user(session, artist)
+                await message.answer(tr("relay_order_closed", lang), reply_markup=menu)
+                await state.clear()
+                return
+
+        await state.set_state(SendArtState.waiting_kind)
+        await state.update_data(order_id=order_id)
+        await message.answer(tr("send_art_choose_kind", lang), reply_markup=art_kind_keyboard(lang))
+        return
+
     async with session_scope() as session:
         artist = await require_role(message, session, UserRole.ARTIST)
-    if artist is None:
-        return
+        if artist is None:
+            return
+        lang = await get_user_language(session, artist.tg_id)
 
     await state.clear()
     await state.set_state(SendArtState.waiting_order_id)
-    await message.answer("Введите ID заказа, по которому отправляете файл:")
+    await message.answer(tr("send_art_ask_order", lang), reply_markup=flow_menu(lang))
 
 
 @router.message(SendArtState.waiting_order_id)
 async def send_art_order_id(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
     raw = (message.text or "").strip()
+    async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
     if not raw.isdigit():
-        await message.answer("ID заказа должен быть числом.")
+        await message.answer(tr("order_id_must_be_number", lang))
         return
 
     await state.update_data(order_id=int(raw))
     await state.set_state(SendArtState.waiting_kind)
-    await message.answer("Выберите тип отправки:", reply_markup=art_kind_keyboard())
+    await message.answer(tr("send_art_choose_kind", lang), reply_markup=art_kind_keyboard(lang))
 
 
 @router.callback_query(F.data.startswith("art_kind:"), SendArtState.waiting_kind)
 async def send_art_kind(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.data is None or callback.message is None:
+    if callback.data is None or callback.message is None or callback.from_user is None:
         return
 
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+
     _, kind_value = callback.data.split(":", maxsplit=1)
-    if kind_value not in {"preview", "final"}:
-        await callback.answer("Неизвестный тип", show_alert=True)
+    if kind_value not in {"preview", "direct"}:
+        await callback.answer(tr("send_art_unknown_kind", lang), show_alert=True)
         return
 
     await state.update_data(kind=kind_value)
     await state.set_state(SendArtState.waiting_media)
-    await callback.message.answer("Отправьте изображение (фото или документ-изображение).")
+    await callback.message.answer(tr("send_art_upload_image", lang))
     await callback.answer()
 
 
@@ -84,98 +129,98 @@ async def send_art_media(message: Message, bot: Bot, state: FSMContext) -> None:
     order_id = data.get("order_id")
     kind_value = data.get("kind")
 
-    if not isinstance(order_id, int) or kind_value not in {"preview", "final"}:
-        await message.answer("Сессия отправки устарела. Повторите /send_art")
-        await state.clear()
-        return
-
-    kind = ArtKind.PREVIEW if kind_value == "preview" else ArtKind.FINAL
-
-    media = await _download_media(bot, message.photo[-1] if message.photo else None, message.document)
-    if media is None:
-        await message.answer("Нужна картинка: отправьте фото или документ-изображение.")
-        return
-
-    original_file_id, image_bytes = media
-
     async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
+        if not isinstance(order_id, int) or kind_value not in {"preview", "direct"}:
+            await message.answer(tr("send_art_session_expired", lang))
+            await state.clear()
+            return
+
+        media = await _download_media(bot, message.photo[-1] if message.photo else None, message.document)
+        if media is None:
+            await message.answer(tr("send_art_need_image", lang))
+            return
+        original_file_id, image_bytes = media
+
         artist = await require_role(message, session, UserRole.ARTIST)
         if artist is None:
             await state.clear()
             return
+        menu = await build_main_menu_for_user(session, artist)
 
         order = await get_order_by_id(session, order_id)
         if order is None:
-            await message.answer("Заказ не найден.")
+            await message.answer(tr("order_not_found", lang))
             return
 
         if order.artist_id != artist.id:
-            await message.answer("Этот заказ не назначен на вас.")
+            await message.answer(tr("send_art_order_not_yours", lang))
             return
 
-        if kind == ArtKind.FINAL and order.status not in {OrderStatus.PAID_ESCROW, OrderStatus.FINAL_REVIEW}:
-            await message.answer(
-                "Финал можно отправить только после escrow оплаты заказчиком (/pay)."
-            )
+        if kind_value == "direct" and order.status not in {
+            OrderStatus.IN_PROGRESS,
+            OrderStatus.PREVIEW_SENT,
+            OrderStatus.PAID_ESCROW,
+            OrderStatus.FINAL_REVIEW,
+        }:
+            await message.answer(tr("send_art_direct_not_available", lang))
             return
 
+        customer_tg = order.customer.tg_id
+        customer_lang = await get_user_language(session, customer_tg)
+        customer_ref = f"@{order.customer.username}" if order.customer.username else str(order.customer.tg_id)
         watermark_file_id = None
-        if kind == ArtKind.PREVIEW:
+
+        if kind_value == "direct":
             watermarked = add_text_watermark(image_bytes, order_id=order.id, artist_nick=artist.nickname)
             sent = await bot.send_photo(
-                chat_id=order.customer.tg_id,
-                photo=BufferedInputFile(watermarked, filename=f"order_{order.id}_preview.jpg"),
-                caption=(
-                    f"Предпросмотр по заказу #{order.id}.\n"
-                    "Файл защищен и предназначен только для проверки до оплаты."
-                ),
+                chat_id=artist.tg_id,
+                photo=BufferedInputFile(watermarked, filename=f"order_{order.id}_direct.jpg"),
+                caption=tr("send_art_direct_caption", lang, order_id=order.id),
                 protect_content=True,
             )
-            order.status = OrderStatus.PREVIEW_SENT
             watermark_file_id = sent.photo[-1].file_id if sent.photo else None
         else:
+            watermarked = add_text_watermark(image_bytes, order_id=order.id, artist_nick=artist.nickname)
             sent = await bot.send_photo(
-                chat_id=order.customer.tg_id,
-                photo=BufferedInputFile(image_bytes, filename=f"order_{order.id}_final.jpg"),
-                caption=(
-                    f"Финальный файл по заказу #{order.id}.\n"
-                    "Рекомендуется дополнительно отправить оригинал в приватном чате как disappearing media (1:1)."
+                chat_id=customer_tg,
+                photo=BufferedInputFile(
+                    watermarked,
+                    filename=f"order_{order.id}_preview.jpg",
+                ),
+                caption=tr(
+                    "send_art_preview_caption",
+                    customer_lang,
+                    order_id=order.id,
                 ),
                 protect_content=True,
             )
-            order.status = OrderStatus.FINAL_REVIEW
             watermark_file_id = sent.photo[-1].file_id if sent.photo else None
+            order.status = OrderStatus.PREVIEW_SENT
 
+        kind_db = ArtKind.PREVIEW
         asset = ArtAsset(
             order_id=order.id,
             sender_id=artist.id,
-            kind=kind,
+            kind=kind_db,
             original_file_id=original_file_id,
             watermarked_file_id=watermark_file_id,
         )
         session.add(asset)
-        customer_tg = order.customer.tg_id
 
     await state.clear()
-    if kind == ArtKind.PREVIEW:
-        await message.answer(
-            (
-                "Предпросмотр отправлен заказчику.\n"
-                "Дальше: заказчик подтверждает оплату escrow через /pay <order_id>."
+    if kind_value == "preview":
+        await message.answer(tr("send_art_preview_done", lang), reply_markup=menu)
+        try:
+            await bot.send_message(
+                customer_tg,
+                tr("send_art_preview_notify_customer", customer_lang, order_id=order_id),
+                protect_content=True,
             )
-        )
-        await bot.send_message(
-            customer_tg,
-            (
-                f"Заказ #{order_id}: после проверки предпросмотра используйте /pay {order_id}, "
-                "чтобы перейти к финальной передаче."
-            ),
-            protect_content=True,
-        )
+        except Exception:
+            pass
     else:
         await message.answer(
-            (
-                "Финал отправлен заказчику.\n"
-                f"Ожидайте релиз средств командой /release {order_id} от заказчика."
-            )
+            tr("send_art_direct_done", lang, customer_ref=customer_ref),
+            reply_markup=menu,
         )

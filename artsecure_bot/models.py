@@ -72,6 +72,8 @@ class Order(Base):
     price_rub: Mapped[int] = mapped_column(Integer)
     escrow_amount_rub: Mapped[int] = mapped_column(Integer, default=0)
     commission_pct: Mapped[int] = mapped_column(Integer, default=10)
+    customer_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    artist_done: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -132,4 +134,20 @@ class BlacklistEntry(Base):
     created_by_tg_id: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class UserLocale(Base):
+    __tablename__ = "user_locales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    language: Mapped[str] = mapped_column(String(8), default="ru")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )

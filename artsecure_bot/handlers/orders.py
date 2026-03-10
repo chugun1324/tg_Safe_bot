@@ -1,86 +1,167 @@
 from __future__ import annotations
 
-from aiogram import F, Bot, Router
+import re
+
+from aiogram import F, Bot, Dispatcher, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from artsecure_bot.config import Settings
 from artsecure_bot.db import session_scope
-from artsecure_bot.handlers.utils import require_registered_user, require_role
-from artsecure_bot.keyboards import order_actions_keyboard, order_decision_keyboard
+from artsecure_bot.handlers.utils import build_main_menu_for_user, require_registered_user, require_role
+from artsecure_bot.i18n import tr, variants
+from artsecure_bot.keyboards import flow_menu, order_actions_keyboard, order_decision_keyboard, relay_menu
 from artsecure_bot.models import OrderStatus, UserRole
-from artsecure_bot.services.order_logic import (
-    calculate_commission,
-    is_premium_active,
-    payout_amount,
-    status_label,
-)
+from artsecure_bot.services.chat_cleanup import clear_chat_keep_message
+from artsecure_bot.services.order_logic import status_label
 from artsecure_bot.services.repository import (
     create_order,
+    delete_order_with_related,
     get_order_by_id,
     get_user_by_tg_id,
+    get_user_by_username,
+    get_user_language,
     list_orders_for_user,
 )
-from artsecure_bot.states import CreateOrderState
+from artsecure_bot.states import CreateOrderState, RelayState
 
 router = Router()
+USERNAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{4,31}$")
+
+
+def _normalize_username(raw: str) -> str | None:
+    normalized = raw.strip().lstrip("@")
+    if not USERNAME_PATTERN.fullmatch(normalized):
+        return None
+    return normalized
+
+
+async def _username_exists_in_telegram(bot: Bot, username: str) -> bool | None:
+    try:
+        chat = await bot.get_chat(f"@{username}")
+    except TelegramBadRequest:
+        return False
+    except Exception:
+        return None
+    return chat.type == "private"
+
+
+async def _activate_relay_context(state: FSMContext, order_id: int) -> None:
+    await state.clear()
+    await state.set_state(RelayState.waiting_message)
+    await state.update_data(order_id=order_id)
+
+
+def _relay_menu_for_order(language: str, is_artist: bool, status: OrderStatus):
+    can_send_art = is_artist and status in {
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.PREVIEW_SENT,
+        OrderStatus.PAID_ESCROW,
+        OrderStatus.FINAL_REVIEW,
+    }
+    can_mark_done = status in {OrderStatus.PAID_ESCROW, OrderStatus.FINAL_REVIEW}
+    return relay_menu(language=language, can_send_art=can_send_art, can_mark_done=can_mark_done)
+
+
+def _relay_available(status: OrderStatus) -> bool:
+    return status in {
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.PREVIEW_SENT,
+        OrderStatus.PAID_ESCROW,
+        OrderStatus.FINAL_REVIEW,
+        OrderStatus.DISPUTED,
+    }
+
+
+def _parse_callback_order_id(data: str | None, prefix: str) -> int | None:
+    if data is None:
+        return None
+    parts = data.split(":")
+    if len(parts) != 2 or parts[0] != prefix or not parts[1].isdigit():
+        return None
+    return int(parts[1])
 
 
 @router.message(Command("create"))
+@router.message(F.text.in_(variants("btn_create_order")))
 async def create_order_start(message: Message, state: FSMContext) -> None:
     async with session_scope() as session:
         customer = await require_role(message, session, UserRole.CUSTOMER)
-    if customer is None:
-        return
+        if customer is None:
+            return
+        lang = await get_user_language(session, customer.tg_id)
 
     await state.clear()
-    await state.set_state(CreateOrderState.waiting_artist_tg_id)
-    await message.answer("Введите Telegram ID исполнителя (число), которому хотите отправить заявку:")
+    await state.set_state(CreateOrderState.waiting_artist_username)
+    await message.answer(tr("create_ask_artist", lang), reply_markup=flow_menu(lang))
 
 
-@router.message(CreateOrderState.waiting_artist_tg_id)
-async def create_order_artist_id(message: Message, state: FSMContext) -> None:
-    raw = (message.text or "").strip()
-    if not raw.isdigit():
-        await message.answer("Нужен числовой Telegram ID исполнителя.")
+@router.message(CreateOrderState.waiting_artist_username)
+async def create_order_artist_username(message: Message, bot: Bot, state: FSMContext) -> None:
+    if message.from_user is None:
         return
+    raw = message.text or ""
+    username = _normalize_username(raw)
 
-    artist_tg_id = int(raw)
     async with session_scope() as session:
-        artist = await get_user_by_tg_id(session, artist_tg_id)
+        lang = await get_user_language(session, message.from_user.id)
+        if username is None:
+            await message.answer(tr("username_invalid", lang))
+            return
 
-    if artist is None or artist.role != UserRole.ARTIST:
-        await message.answer("Исполнитель не найден или не зарегистрирован в роли исполнителя.")
+        artist = await get_user_by_username(session, username)
+
+    if artist is None:
+        exists = await _username_exists_in_telegram(bot, username)
+        if exists is False:
+            await message.answer(tr("username_not_exists", lang))
+        elif exists is True:
+            await message.answer(tr("username_not_registered_artist", lang))
+        else:
+            await message.answer(tr("username_check_failed", lang))
         return
 
-    await state.update_data(artist_tg_id=artist_tg_id)
+    if artist.role != UserRole.ARTIST:
+        await message.answer(tr("username_not_artist_role", lang))
+        return
+
+    await state.update_data(artist_tg_id=artist.tg_id, artist_username=artist.username or username)
     await state.set_state(CreateOrderState.waiting_title)
-    await message.answer("Введите название заказа:")
+    await message.answer(tr("create_ask_title", lang), reply_markup=flow_menu(lang))
 
 
 @router.message(CreateOrderState.waiting_title)
 async def create_order_title(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
     title = (message.text or "").strip()
+    async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
     if len(title) < 3:
-        await message.answer("Название слишком короткое.")
+        await message.answer(tr("create_title_short", lang))
         return
 
     await state.update_data(title=title)
     await state.set_state(CreateOrderState.waiting_details)
-    await message.answer("Опишите детали заказа:")
+    await message.answer(tr("create_ask_details", lang), reply_markup=flow_menu(lang))
 
 
 @router.message(CreateOrderState.waiting_details)
 async def create_order_details(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
     details = (message.text or "").strip()
+    async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
     if len(details) < 5:
-        await message.answer("Опишите заказ чуть подробнее (минимум 5 символов).")
+        await message.answer(tr("create_details_short", lang))
         return
 
     await state.update_data(details=details)
     await state.set_state(CreateOrderState.waiting_price)
-    await message.answer("Введите цену в рублях (например 3500):")
+    await message.answer(tr("create_ask_price", lang), reply_markup=flow_menu(lang))
 
 
 @router.message(CreateOrderState.waiting_price)
@@ -89,38 +170,42 @@ async def create_order_price(message: Message, bot: Bot, state: FSMContext) -> N
         return
 
     raw = (message.text or "").strip()
-    if not raw.isdigit():
-        await message.answer("Цена должна быть целым числом в рублях.")
-        return
-
-    price = int(raw)
-    if price <= 0:
-        await message.answer("Цена должна быть больше нуля.")
-        return
-
-    data = await state.get_data()
-    artist_tg_id = data.get("artist_tg_id")
-    title = data.get("title")
-    details = data.get("details")
-
-    if not artist_tg_id or not title or not details:
-        await message.answer("Сценарий устарел. Начните заново: /create")
-        await state.clear()
-        return
 
     async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
+        if not raw.isdigit():
+            await message.answer(tr("price_int_only", lang))
+            return
+
+        price = int(raw)
+        if price <= 0:
+            await message.answer(tr("price_positive", lang))
+            return
+
+        data = await state.get_data()
+        artist_tg_id = data.get("artist_tg_id")
+        artist_username = data.get("artist_username")
+        title = data.get("title")
+        details = data.get("details")
+
+        if not isinstance(artist_tg_id, int) or not title or not details:
+            await message.answer(tr("create_expired", lang))
+            await state.clear()
+            return
+
         customer = await get_user_by_tg_id(session, message.from_user.id)
         artist = await get_user_by_tg_id(session, int(artist_tg_id))
         if customer is None or artist is None:
-            await message.answer("Не удалось создать заказ: пользователь не найден.")
+            await message.answer(tr("create_user_not_found", lang))
             await state.clear()
             return
 
         if customer.role != UserRole.CUSTOMER:
-            await message.answer("Создавать заказ может только заказчик.")
+            await message.answer(tr("create_only_customer", lang))
             await state.clear()
             return
 
+        artist_lang = await get_user_language(session, artist.tg_id)
         order = await create_order(
             session=session,
             customer_id=customer.id,
@@ -129,48 +214,63 @@ async def create_order_price(message: Message, bot: Bot, state: FSMContext) -> N
             details=details,
             price_rub=price,
         )
+        customer_menu = await build_main_menu_for_user(session, customer)
 
     await state.clear()
     await message.answer(
-        (
-            f"Заявка #{order.id} создана и отправлена исполнителю.\n"
-            f"Название: {title}\nЦена: {price} RUB\n"
-            "Ожидайте принятия заявки."
-        )
+        tr(
+            "create_done",
+            lang,
+            order_id=order.id,
+            artist_username=artist_username or tr("unknown", lang),
+            title=title,
+            price=price,
+        ),
+        reply_markup=customer_menu,
     )
 
     try:
         await bot.send_message(
             artist_tg_id,
-            (
-                f"Новая заявка #{order.id}\n"
-                f"От: {message.from_user.full_name} (@{message.from_user.username or 'без username'})\n"
-                f"Название: {title}\n"
-                f"Детали: {details}\n"
-                f"Цена: {price} RUB"
+            tr(
+                "create_send_to_artist",
+                artist_lang,
+                order_id=order.id,
+                customer_name=message.from_user.full_name,
+                customer_username=message.from_user.username or tr("no_username", artist_lang),
+                title=title,
+                details=details,
+                price=price,
             ),
-            reply_markup=order_decision_keyboard(order.id),
+            reply_markup=order_decision_keyboard(order.id, artist_lang),
             protect_content=True,
         )
     except Exception:
-        await message.answer(
-            "Не удалось отправить заявку исполнителю в ЛС. Убедитесь, что он начал диалог с ботом через /start."
-        )
+        await message.answer(tr("create_send_to_artist_failed", lang))
 
 
 @router.callback_query(F.data.startswith("order_decision:"))
-async def order_decision(callback: CallbackQuery, bot: Bot) -> None:
-    if callback.from_user is None or callback.data is None:
+async def order_decision(
+    callback: CallbackQuery,
+    bot: Bot,
+    state: FSMContext,
+    dispatcher: Dispatcher,
+) -> None:
+    if callback.from_user is None or callback.data is None or callback.message is None:
         return
 
     parts = callback.data.split(":")
     if len(parts) != 3:
-        await callback.answer("Неверный формат", show_alert=True)
+        async with session_scope() as session:
+            lang = await get_user_language(session, callback.from_user.id)
+        await callback.answer(tr("order_decision_invalid_format", lang), show_alert=True)
         return
 
     _, order_id_raw, action = parts
     if not order_id_raw.isdigit() or action not in {"accept", "reject"}:
-        await callback.answer("Неверные данные", show_alert=True)
+        async with session_scope() as session:
+            lang = await get_user_language(session, callback.from_user.id)
+        await callback.answer(tr("order_decision_invalid_data", lang), show_alert=True)
         return
 
     order_id = int(order_id_raw)
@@ -178,71 +278,101 @@ async def order_decision(callback: CallbackQuery, bot: Bot) -> None:
     async with session_scope() as session:
         order = await get_order_by_id(session, order_id)
         artist = await get_user_by_tg_id(session, callback.from_user.id)
+        artist_lang = await get_user_language(session, callback.from_user.id)
         if order is None or artist is None:
-            await callback.answer("Заказ не найден", show_alert=True)
+            await callback.answer(tr("order_not_found", artist_lang), show_alert=True)
             return
 
         if order.artist_id != artist.id:
-            await callback.answer("Это не ваш заказ", show_alert=True)
+            await callback.answer(tr("order_not_yours", artist_lang), show_alert=True)
             return
 
         if order.status != OrderStatus.PENDING_ARTIST:
-            await callback.answer("Заказ уже обработан")
+            await callback.answer(tr("order_already_processed", artist_lang))
             return
+
+        customer_tg = order.customer.tg_id
+        customer_lang = await get_user_language(session, customer_tg)
+        artist_tg = order.artist.tg_id
 
         if action == "accept":
             order.status = OrderStatus.IN_PROGRESS
-            customer_tg = order.customer.tg_id
-            artist_tg = order.artist.tg_id
-            await callback.answer("Заявка принята")
+            await callback.answer(tr("order_accept_short", artist_lang))
             await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer("Заявка принята. Можете обсудить детали и ждать оплату escrow.")
         else:
             order.status = OrderStatus.CANCELLED
-            customer_tg = order.customer.tg_id
-            artist_tg = order.artist.tg_id
-            await callback.answer("Заявка отклонена")
+            await callback.answer(tr("order_reject_short", artist_lang))
             await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer("Заявка отклонена.")
+            await callback.message.answer(tr("order_rejected_message", artist_lang))
 
     if action == "accept":
-        await bot.send_message(customer_tg, f"Исполнитель принял заявку #{order_id}.", protect_content=True)
-        await bot.send_message(
-            artist_tg,
-            (
-                f"Заказ #{order_id} переведен в работу.\n"
-                "Используйте /relay <order_id> для безопасной переписки в рамках заказа."
+        await _activate_relay_context(state, order_id)
+        customer_state = dispatcher.fsm.get_context(bot=bot, chat_id=customer_tg, user_id=customer_tg)
+        await _activate_relay_context(customer_state, order_id)
+
+        artist_notice = await callback.message.answer(
+            tr(
+                "relay_activated_artist",
+                artist_lang,
+                order_id=order_id,
+                leave_label=tr("btn_leave_relay", artist_lang),
+            ),
+            reply_markup=relay_menu(artist_lang, can_send_art=True, can_mark_done=False),
+        )
+
+        customer_notice = await bot.send_message(
+            customer_tg,
+            tr(
+                "relay_activated_customer",
+                customer_lang,
+                order_id=order_id,
+                leave_label=tr("btn_leave_relay", customer_lang),
             ),
             protect_content=True,
+            reply_markup=relay_menu(customer_lang, can_send_art=False, can_mark_done=False),
         )
+
+        await clear_chat_keep_message(bot, artist_tg, artist_notice.message_id)
+        await clear_chat_keep_message(bot, customer_tg, customer_notice.message_id)
     else:
-        await bot.send_message(customer_tg, f"Исполнитель отклонил заявку #{order_id}.", protect_content=True)
+        await bot.send_message(
+            customer_tg,
+            tr("order_rejected_notify_customer", customer_lang, order_id=order_id),
+            protect_content=True,
+        )
 
 
 @router.message(Command("my_orders"))
+@router.message(F.text.in_(variants("btn_my_orders")))
 async def my_orders(message: Message) -> None:
     async with session_scope() as session:
         user = await require_registered_user(message, session)
         if user is None:
             return
 
+        lang = await get_user_language(session, user.tg_id)
         orders = await list_orders_for_user(session, user)
+        menu = await build_main_menu_for_user(session, user)
 
     if not orders:
-        await message.answer("У вас пока нет заказов.")
+        await message.answer(tr("my_orders_empty", lang), reply_markup=menu)
         return
 
     for order in orders:
-        text = (
-            f"Заказ #{order.id}\n"
-            f"Статус: {status_label(order.status)}\n"
-            f"Название: {order.title}\n"
-            f"Цена: {order.price_rub} RUB\n"
-            f"Заказчик: {order.customer.nickname} ({order.customer.tg_id})\n"
-            f"Исполнитель: {order.artist.nickname} ({order.artist.tg_id})"
+        text = tr(
+            "my_order_card",
+            lang,
+            order_id=order.id,
+            status=status_label(order.status, lang),
+            title=order.title,
+            price=order.price_rub,
+            customer=f"{order.customer.nickname} ({order.customer.tg_id})",
+            artist=f"{order.artist.nickname} ({order.artist.tg_id})",
         )
-        markup = order_actions_keyboard(order.id) if user.role == UserRole.CUSTOMER else None
+        markup = order_actions_keyboard(order.id, order.status, user.role, lang)
         await message.answer(text, reply_markup=markup)
+
+    await message.answer(tr("my_orders_footer", lang), reply_markup=menu)
 
 
 def _extract_order_id(message: Message) -> int | None:
@@ -255,200 +385,398 @@ def _extract_order_id(message: Message) -> int | None:
 @router.message(Command("pay"))
 async def pay_order(message: Message, bot: Bot) -> None:
     order_id = _extract_order_id(message)
-    if order_id is None:
-        await message.answer("Использование: /pay <order_id>")
-        return
-
     async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id if message.from_user else 0)
+        if order_id is None:
+            await message.answer(tr("usage_pay", lang))
+            return
+
         customer = await require_role(message, session, UserRole.CUSTOMER)
         if customer is None:
             return
 
         order = await get_order_by_id(session, order_id)
         if order is None:
-            await message.answer("Заказ не найден.")
+            await message.answer(tr("order_not_found", lang))
             return
 
         if order.customer_id != customer.id:
-            await message.answer("Это не ваш заказ.")
+            await message.answer(tr("pay_not_your_order", lang))
             return
 
         if order.status not in {OrderStatus.IN_PROGRESS, OrderStatus.PREVIEW_SENT}:
-            await message.answer("Оплата доступна только для заказов в работе/после предпросмотра.")
+            await message.answer(tr("pay_not_available_status", lang))
             return
 
         order.status = OrderStatus.PAID_ESCROW
+        order.customer_done = False
+        order.artist_done = False
         order.escrow_amount_rub = order.price_rub
         artist_tg = order.artist.tg_id
+        artist_lang = await get_user_language(session, artist_tg)
 
     await message.answer(
-        (
-            f"Escrow для заказа #{order_id} отмечен как оплаченный.\n"
-            "Исполнитель может отправить финальный файл командой /send_art"
-        )
+        tr("pay_marked_done", lang, order_id=order_id, done_label=tr("btn_mark_done", lang)),
+        reply_markup=relay_menu(lang, can_send_art=False, can_mark_done=True),
     )
     await bot.send_message(
         artist_tg,
-        f"Заказ #{order_id}: заказчик пополнил escrow на {order.price_rub} RUB.",
+        tr("pay_notify_artist", artist_lang, order_id=order_id, price=order.price_rub),
         protect_content=True,
+        reply_markup=relay_menu(artist_lang, can_send_art=True, can_mark_done=True),
     )
 
 
 @router.message(Command("release"))
-async def release_order(message: Message, bot: Bot) -> None:
+async def release_order(message: Message) -> None:
     order_id = _extract_order_id(message)
-    if order_id is None:
-        await message.answer("Использование: /release <order_id>")
-        return
-
     async with session_scope() as session:
-        customer = await require_role(message, session, UserRole.CUSTOMER)
-        if customer is None:
-            return
-
-        order = await get_order_by_id(session, order_id)
-        if order is None:
-            await message.answer("Заказ не найден.")
-            return
-
-        if order.customer_id != customer.id:
-            await message.answer("Это не ваш заказ.")
-            return
-
-        if order.status not in {OrderStatus.FINAL_REVIEW, OrderStatus.PAID_ESCROW, OrderStatus.PREVIEW_SENT}:
-            await message.answer("Релиз доступен после отправки финала/оплаты.")
-            return
-
-        premium = is_premium_active(order.artist.premium_until)
-        commission = calculate_commission(order.price_rub, premium, order.commission_pct)
-        payout = payout_amount(order.price_rub, commission)
-        order.status = OrderStatus.COMPLETED
-        artist_tg = order.artist.tg_id
-
+        lang = await get_user_language(session, message.from_user.id if message.from_user else 0)
+    if order_id is None:
+        await message.answer(tr("usage_release", lang))
+        return
     await message.answer(
-        (
-            f"Заказ #{order_id} завершен.\n"
-            f"Комиссия платформы: {commission} RUB\n"
-            f"К выплате исполнителю: {payout} RUB"
-        )
-    )
-    await bot.send_message(
-        artist_tg,
-        (
-            f"Заказ #{order_id} успешно завершен заказчиком.\n"
-            f"К выплате (mock): {payout} RUB, комиссия: {commission} RUB"
-        ),
-        protect_content=True,
+        tr("release_not_available_status", lang, done_label=tr("btn_mark_done", lang)),
+        reply_markup=relay_menu(lang, can_send_art=False, can_mark_done=True),
     )
 
 
 @router.message(Command("dispute"))
 async def dispute_order(message: Message, bot: Bot, settings: Settings) -> None:
     order_id = _extract_order_id(message)
-    if order_id is None:
-        await message.answer("Использование: /dispute <order_id>")
-        return
-
     if message.from_user is None:
         return
 
     async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
+        if order_id is None:
+            await message.answer(tr("usage_dispute", lang))
+            return
+
         user = await require_registered_user(message, session)
         if user is None:
             return
 
         order = await get_order_by_id(session, order_id)
         if order is None:
-            await message.answer("Заказ не найден.")
+            await message.answer(tr("order_not_found", lang))
             return
 
         allowed = user.id in {order.customer_id, order.artist_id} or user.tg_id in settings.admin_ids
         if not allowed:
-            await message.answer("Вы не участник этого заказа.")
+            await message.answer(tr("dispute_not_participant", lang))
             return
 
         order.status = OrderStatus.DISPUTED
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
+        customer_lang = await get_user_language(session, customer_tg)
+        artist_lang = await get_user_language(session, artist_tg)
 
-    await message.answer(
-        f"Спор по заказу #{order_id} открыт. Администратор рассмотрит его в течение 7 дней."
-    )
+    await message.answer(tr("dispute_opened", lang, order_id=order_id))
 
     if message.from_user.id != customer_tg:
-        await bot.send_message(customer_tg, f"По заказу #{order_id} открыт спор.", protect_content=True)
+        await bot.send_message(
+            customer_tg, tr("dispute_notify_user", customer_lang, order_id=order_id), protect_content=True
+        )
     if message.from_user.id != artist_tg:
-        await bot.send_message(artist_tg, f"По заказу #{order_id} открыт спор.", protect_content=True)
+        await bot.send_message(
+            artist_tg, tr("dispute_notify_user", artist_lang, order_id=order_id), protect_content=True
+        )
 
     for admin_id in settings.admin_ids:
         if admin_id == message.from_user.id:
             continue
         await bot.send_message(
             admin_id,
-            (
-                f"[ADMIN] Новый спор\n"
-                f"Заказ #{order_id}\n"
-                f"Заказчик: {customer_tg}\n"
-                f"Исполнитель: {artist_tg}"
-            ),
+            tr("dispute_admin_new", lang, order_id=order_id, customer_tg=customer_tg, artist_tg=artist_tg),
         )
 
 
 @router.message(Command("force_close"))
 async def force_close_order(message: Message, bot: Bot) -> None:
     order_id = _extract_order_id(message)
-    if order_id is None:
-        await message.answer("Использование: /force_close <order_id>")
-        return
-
     if message.from_user is None:
         return
 
     async with session_scope() as session:
+        lang = await get_user_language(session, message.from_user.id)
+        if order_id is None:
+            await message.answer(tr("usage_force_close", lang))
+            return
+
         user = await require_registered_user(message, session)
         if user is None:
             return
 
         order = await get_order_by_id(session, order_id)
         if order is None:
-            await message.answer("Заказ не найден.")
+            await message.answer(tr("order_not_found", lang))
             return
 
         if user.id not in {order.customer_id, order.artist_id}:
-            await message.answer("Вы не участник этого заказа.")
+            await message.answer(tr("dispute_not_participant", lang))
             return
 
         if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED}:
-            await message.answer("Заказ уже закрыт.")
+            await message.answer(tr("force_close_already", lang))
             return
 
         order.status = OrderStatus.CANCELLED
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
+        customer_lang = await get_user_language(session, customer_tg)
+        artist_lang = await get_user_language(session, artist_tg)
 
-    await message.answer(f"Заказ #{order_id} закрыт принудительно.")
+    await message.answer(tr("force_close_done", lang, order_id=order_id))
     if message.from_user.id != customer_tg:
-        await bot.send_message(customer_tg, f"Заказ #{order_id} закрыт принудительно второй стороной.")
+        await bot.send_message(
+            customer_tg, tr("force_close_notify_other", customer_lang, order_id=order_id)
+        )
     if message.from_user.id != artist_tg:
-        await bot.send_message(artist_tg, f"Заказ #{order_id} закрыт принудительно второй стороной.")
+        await bot.send_message(
+            artist_tg, tr("force_close_notify_other", artist_lang, order_id=order_id)
+        )
 
 
 @router.callback_query(F.data.startswith("pay:"))
 async def pay_callback(callback: CallbackQuery, bot: Bot) -> None:
-    if callback.message is None:
+    if callback.from_user is None or callback.data is None:
         return
-    await callback.answer("Используйте команду /pay <id>")
+    order_id = _parse_callback_order_id(callback.data, "pay")
+    if order_id is None:
+        return
+
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+        user = await get_user_by_tg_id(session, callback.from_user.id)
+        if user is None:
+            await callback.answer(tr("err_not_registered", lang), show_alert=True)
+            return
+        if user.is_banned:
+            await callback.answer(tr("err_banned", lang), show_alert=True)
+            return
+        if user.role != UserRole.CUSTOMER:
+            await callback.answer(tr("err_wrong_role", lang), show_alert=True)
+            return
+
+        order = await get_order_by_id(session, order_id)
+        if order is None:
+            await callback.answer(tr("order_not_found", lang), show_alert=True)
+            return
+        if order.customer_id != user.id:
+            await callback.answer(tr("pay_not_your_order", lang), show_alert=True)
+            return
+        if order.status not in {OrderStatus.IN_PROGRESS, OrderStatus.PREVIEW_SENT}:
+            await callback.answer(tr("pay_not_available_status", lang), show_alert=True)
+            return
+
+        order.status = OrderStatus.PAID_ESCROW
+        order.customer_done = False
+        order.artist_done = False
+        order.escrow_amount_rub = order.price_rub
+        price_rub = order.price_rub
+        artist_tg = order.artist.tg_id
+        artist_lang = await get_user_language(session, artist_tg)
+        updated_markup = order_actions_keyboard(order.id, order.status, user.role, lang)
+
+    await callback.answer()
+    if callback.message is not None:
+        await callback.message.edit_reply_markup(reply_markup=updated_markup)
+        await callback.message.answer(
+            tr("pay_marked_done", lang, order_id=order_id, done_label=tr("btn_mark_done", lang)),
+            reply_markup=_relay_menu_for_order(lang, is_artist=False, status=OrderStatus.PAID_ESCROW),
+        )
+    await bot.send_message(
+        artist_tg,
+        tr("pay_notify_artist", artist_lang, order_id=order_id, price=price_rub),
+        protect_content=True,
+        reply_markup=_relay_menu_for_order(artist_lang, is_artist=True, status=OrderStatus.PAID_ESCROW),
+    )
 
 
 @router.callback_query(F.data.startswith("release:"))
 async def release_callback(callback: CallbackQuery, bot: Bot) -> None:
-    if callback.message is None:
+    if callback.from_user is None or callback.data is None:
         return
-    await callback.answer("Используйте команду /release <id>")
+    order_id = _parse_callback_order_id(callback.data, "release")
+    if order_id is None:
+        return
+
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+        user = await get_user_by_tg_id(session, callback.from_user.id)
+        if user is None:
+            await callback.answer(tr("err_not_registered", lang), show_alert=True)
+            return
+        if user.is_banned:
+            await callback.answer(tr("err_banned", lang), show_alert=True)
+            return
+
+        order = await get_order_by_id(session, order_id)
+        if order is None:
+            await callback.answer(tr("order_not_found", lang), show_alert=True)
+            return
+        if order.customer_id != user.id:
+            await callback.answer(tr("pay_not_your_order", lang), show_alert=True)
+            return
+
+        order_status = order.status
+        updated_markup = order_actions_keyboard(order.id, order.status, user.role, lang)
+
+    await callback.answer()
+    if callback.message is not None:
+        await callback.message.edit_reply_markup(reply_markup=updated_markup)
+        await callback.message.answer(
+            tr("release_not_available_status", lang, done_label=tr("btn_mark_done", lang)),
+            reply_markup=_relay_menu_for_order(lang, is_artist=False, status=order_status),
+        )
 
 
 @router.callback_query(F.data.startswith("dispute:"))
-async def dispute_callback(callback: CallbackQuery, bot: Bot) -> None:
-    if callback.message is None:
+async def dispute_callback(callback: CallbackQuery, bot: Bot, settings: Settings) -> None:
+    if callback.from_user is None or callback.data is None:
         return
-    await callback.answer("Используйте команду /dispute <id>")
+    order_id = _parse_callback_order_id(callback.data, "dispute")
+    if order_id is None:
+        return
+
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+        user = await get_user_by_tg_id(session, callback.from_user.id)
+        if user is None:
+            await callback.answer(tr("err_not_registered", lang), show_alert=True)
+            return
+        if user.is_banned:
+            await callback.answer(tr("err_banned", lang), show_alert=True)
+            return
+
+        order = await get_order_by_id(session, order_id)
+        if order is None:
+            await callback.answer(tr("order_not_found", lang), show_alert=True)
+            return
+
+        allowed = user.id in {order.customer_id, order.artist_id} or user.tg_id in settings.admin_ids
+        if not allowed:
+            await callback.answer(tr("dispute_not_participant", lang), show_alert=True)
+            return
+
+        if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED}:
+            await callback.answer(tr("relay_order_closed", lang), show_alert=True)
+            return
+
+        order.status = OrderStatus.DISPUTED
+        customer_tg = order.customer.tg_id
+        artist_tg = order.artist.tg_id
+        customer_lang = await get_user_language(session, customer_tg)
+        artist_lang = await get_user_language(session, artist_tg)
+        updated_markup = order_actions_keyboard(order.id, order.status, user.role, lang)
+
+    await callback.answer()
+    if callback.message is not None:
+        await callback.message.edit_reply_markup(reply_markup=updated_markup)
+        await callback.message.answer(tr("dispute_opened", lang, order_id=order_id))
+
+    if callback.from_user.id != customer_tg:
+        await bot.send_message(
+            customer_tg, tr("dispute_notify_user", customer_lang, order_id=order_id), protect_content=True
+        )
+    if callback.from_user.id != artist_tg:
+        await bot.send_message(
+            artist_tg, tr("dispute_notify_user", artist_lang, order_id=order_id), protect_content=True
+        )
+
+    for admin_id in settings.admin_ids:
+        if admin_id == callback.from_user.id:
+            continue
+        await bot.send_message(
+            admin_id,
+            tr("dispute_admin_new", lang, order_id=order_id, customer_tg=customer_tg, artist_tg=artist_tg),
+        )
+
+
+@router.callback_query(F.data.startswith("relay_open:"))
+async def relay_open_callback(callback: CallbackQuery, bot: Bot, state: FSMContext) -> None:
+    if callback.from_user is None or callback.data is None or callback.message is None:
+        return
+    order_id = _parse_callback_order_id(callback.data, "relay_open")
+    if order_id is None:
+        return
+
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+        user = await get_user_by_tg_id(session, callback.from_user.id)
+        if user is None:
+            await callback.answer(tr("err_not_registered", lang), show_alert=True)
+            return
+        if user.is_banned:
+            await callback.answer(tr("err_banned", lang), show_alert=True)
+            return
+
+        order = await get_order_by_id(session, order_id)
+        if order is None:
+            await callback.answer(tr("order_not_found", lang), show_alert=True)
+            return
+        if user.id not in {order.customer_id, order.artist_id}:
+            await callback.answer(tr("dispute_not_participant", lang), show_alert=True)
+            return
+        if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED}:
+            await callback.answer(tr("relay_order_closed", lang), show_alert=True)
+            return
+        if not _relay_available(order.status):
+            await callback.answer(tr("relay_not_available_status", lang), show_alert=True)
+            return
+
+        is_artist = user.id == order.artist_id
+        relay_markup = _relay_menu_for_order(lang, is_artist=is_artist, status=order.status)
+
+    await callback.answer()
+    await _activate_relay_context(state, order_id)
+    notice = await callback.message.answer(
+        tr("relay_activated", lang, order_id=order_id, leave_label=tr("btn_leave_relay", lang)),
+        reply_markup=relay_markup,
+    )
+    await clear_chat_keep_message(bot, callback.message.chat.id, notice.message_id)
+
+
+@router.callback_query(F.data.startswith("delete_order:"))
+async def delete_order_callback(callback: CallbackQuery, bot: Bot) -> None:
+    if callback.data is None or callback.from_user is None:
+        return
+    parts = callback.data.split(":")
+    if len(parts) != 2 or not parts[1].isdigit():
+        return
+    order_id = int(parts[1])
+
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+        user = await get_user_by_tg_id(session, callback.from_user.id)
+        if user is None:
+            await callback.answer(tr("err_not_registered", lang), show_alert=True)
+            return
+        if user.is_banned:
+            await callback.answer(tr("err_banned", lang), show_alert=True)
+            return
+
+        order = await get_order_by_id(session, order_id)
+        if order is None:
+            await callback.answer(tr("order_not_found", lang), show_alert=True)
+            return
+
+        if order.customer_id != user.id:
+            await callback.answer(tr("delete_only_customer", lang), show_alert=True)
+            return
+
+        artist_tg = order.artist.tg_id
+        artist_lang = await get_user_language(session, artist_tg)
+        await delete_order_with_related(session, order_id)
+        menu = await build_main_menu_for_user(session, user)
+
+    await callback.answer()
+    if callback.message is not None:
+        await callback.message.answer(tr("delete_order_done", lang, order_id=order_id), reply_markup=menu)
+    await bot.send_message(
+        artist_tg,
+        tr("delete_order_notify_artist", artist_lang, order_id=order_id),
+        protect_content=True,
+    )
