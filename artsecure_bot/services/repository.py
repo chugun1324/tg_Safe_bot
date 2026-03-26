@@ -21,6 +21,11 @@ async def get_user_by_tg_id(session: AsyncSession, tg_id: int) -> User | None:
     return await session.scalar(query)
 
 
+async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
+    query = select(User).where(User.id == user_id)
+    return await session.scalar(query)
+
+
 async def get_user_language(session: AsyncSession, tg_id: int) -> str:
     query = select(UserLocale).where(UserLocale.tg_id == tg_id)
     locale = await session.scalar(query)
@@ -134,6 +139,18 @@ async def list_orders_for_user(session: AsyncSession, user: User) -> list[Order]
     return list(rows)
 
 
+async def list_disputed_orders(session: AsyncSession, limit: int = 50) -> list[Order]:
+    query = (
+        select(Order)
+        .where(Order.status == OrderStatus.DISPUTED)
+        .options(selectinload(Order.customer), selectinload(Order.artist), selectinload(Order.assets))
+        .order_by(Order.created_at.desc())
+        .limit(limit)
+    )
+    rows = await session.scalars(query)
+    return list(rows)
+
+
 async def has_orders_for_customer(session: AsyncSession, customer_id: int) -> bool:
     total = await session.scalar(select(func.count(Order.id)).where(Order.customer_id == customer_id)) or 0
     return int(total) > 0
@@ -178,6 +195,18 @@ async def create_report(
     session.add(report)
     await session.flush()
     return report
+
+
+async def list_reports(session: AsyncSession, limit: int = 100) -> list[Report]:
+    query = select(Report).options(selectinload(Report.order)).order_by(Report.created_at.desc()).limit(limit)
+    rows = await session.scalars(query)
+    return list(rows)
+
+
+async def list_users(session: AsyncSession, limit: int = 200) -> list[User]:
+    query = select(User).order_by(User.created_at.desc()).limit(limit)
+    rows = await session.scalars(query)
+    return list(rows)
 
 
 async def delete_order_with_related(session: AsyncSession, order_id: int) -> None:

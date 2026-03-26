@@ -75,6 +75,7 @@ class Order(Base):
     customer_done: Mapped[bool] = mapped_column(Boolean, default=False)
     artist_done: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), index=True)
+    status_before_dispute: Mapped[OrderStatus | None] = mapped_column(SQLEnum(OrderStatus), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

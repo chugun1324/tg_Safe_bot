@@ -26,6 +26,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "btn_language": "Язык",
         "role_customer": "Заказчик",
         "role_artist": "Исполнитель",
+        "role_admin": "Админ",
         "order_decision_accept": "Принять",
         "order_decision_reject": "Отклонить",
         "art_kind_preview": "Предпросмотр",
@@ -122,7 +123,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Новая заявка #{order_id}\n"
             "От: {customer_name} (@{customer_username})\n"
             "Название: {title}\n"
-            "Детали: {details}\n"
             "Цена: {price} RUB"
         ),
         "create_send_to_artist_failed": (
@@ -218,7 +218,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_sender_artist": "Исполнитель",
         "relay_forward": "[Relay заказ #{order_id}] {sender_role} {sender_name}:\n{text}",
         "relay_media_forward": "[Relay заказ #{order_id}] {sender_role} {sender_name} отправил медиафайл.",
-        "relay_sent": "Сообщение отправлено.",
+        "relay_media_use_send_art": "Для отправки работы используйте кнопку «Отправить работу».",
+        # "relay_sent": "Сообщение отправлено.",
         "relay_done_not_paid": "Завершение доступно только после оплаты escrow.",
         "relay_done_already": "Вы уже подтвердили завершение по этому заказу.",
         "relay_done_marked": "Ваше подтверждение учтено.",
@@ -287,6 +288,81 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "search_ask_query": "Введите запрос для поиска исполнителя (ник/username/контакт):",
         "search_query_short": "Слишком короткий запрос. Минимум 2 символа.",
         "admin_only": "Команда доступна только администратору.",
+        "admin_panel_entering": "Открываю админ-панель...",
+        "admin_panel_welcome": "Вы находитесь в админ-панели. Выберите раздел:",
+        "admin_btn_disputes": "Открытые споры",
+        "admin_btn_reports": "Жалобы",
+        "admin_btn_blocks": "Блок/Разблок пользователей",
+        "admin_btn_users": "БД users",
+        "admin_btn_exit_panel": "Выйти из админ-панели",
+        "admin_btn_back": "Назад",
+        "admin_btn_prev": "Предыдущая",
+        "admin_btn_next": "Следующая",
+        "admin_btn_search": "Поиск пользователя",
+        "admin_btn_resolve_refund": "Решение: возврат",
+        "admin_btn_resolve_release": "Решение: релиз",
+        "admin_btn_dispute_close": "Закрыть спор",
+        "admin_btn_report_close": "Убрать жалобу",
+        "admin_btn_toggle_found_user": "Блок/Разблок пользователя",
+        "admin_btn_back_blocks": "К блокировкам",
+        "admin_btn_back_users": "К users",
+        "admin_btn_back_section": "Назад к разделу",
+        "admin_btn_back_disputes": "К списку споров",
+        "admin_disputes_empty": "Открытых споров сейчас нет.",
+        "admin_disputes_title": "Открытые споры ({count}):",
+        "admin_disputes_row": (
+            "- Заказ #{order_id} | заказчик: {customer_ref} | исполнитель: {artist_ref} | {price} RUB"
+        ),
+        "admin_dispute_row_button": "Открыть спор #{order_id}",
+        "admin_dispute_card": (
+            "Спор по заказу #{order_id}\n"
+            "Статус: {status}\n"
+            "Заказчик: {customer_ref}\n"
+            "Исполнитель: {artist_ref}\n"
+            "Название: {title}\n"
+            "Цена: {price} RUB\n"
+            "Файлов исполнителя в ZIP: {assets}"
+        ),
+        "admin_dispute_not_open": "Этот спор уже закрыт.",
+        "admin_dispute_closed": "Спор закрыт.",
+        "admin_dispute_closed_text": "Спор по заказу #{order_id} закрыт без решения. Заказ возвращен в работу.",
+        "admin_dispute_closed_notify": "Администратор закрыл спор по заказу #{order_id}. Заказ возвращен в работу.",
+        "admin_dispute_zip_caption": "Спор #{order_id}: ZIP с медиа исполнителя ({files} файлов).",
+        "admin_dispute_zip_empty": "По спору #{order_id} не найдено доступных медиа исполнителя.",
+        "admin_reports_empty": "Жалоб пока нет.",
+        "admin_report_not_found": "Жалоба не найдена.",
+        "admin_report_closed": "Жалоба убрана.",
+        "admin_reports_card": (
+            "Жалоба {index}/{total}\n"
+            "ID жалобы: #{report_id}\n"
+            "Создана: {created_at}\n"
+            "ID заказа: {order_id}\n"
+            "Кто жалуется: {reporter_ref}\n"
+            "На кого жалоба: {target_ref}\n"
+            "Статус: {status}\n"
+            "Причина:\n"
+            "{reason}"
+        ),
+        "admin_users_empty": "В таблице users нет записей.",
+        "admin_users_header": "Users ({start}-{end} из {total}):",
+        "admin_users_row": "ID={user_id} | {user_ref} | роль={role} | статус={status}",
+        "admin_user_active": "активен",
+        "admin_user_blocked": "заблокирован",
+        "admin_user_no_username": "без username",
+        "admin_user_open_profile": "Открыть профиль",
+        "admin_toggle_user": "{username} ({status})",
+        "admin_toggle_done": "Пользователь {username}: статус обновлен -> {status}",
+        "admin_search_prompt": "Введите @username или TG ID пользователя:",
+        "admin_search_invalid": "Неверный формат. Введите @username или числовой TG ID.",
+        "admin_user_not_found_search": "Пользователь не найден.",
+        "admin_user_found_card": (
+            "Пользователь найден:\n"
+            "ID в БД: {user_id}\n"
+            "Профиль: {user_ref}\n"
+            "Роль: {role}\n"
+            "Статус: {status}"
+        ),
+        "admin_block_reason": "Блокировка через админ-панель",
         "admin_stats": (
             "[ADMIN] Статистика\n"
             "Всего заказов: {total_orders}\n"
@@ -294,6 +370,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "В спорах: {disputed_orders}\n"
             "Оборот (gross): {gross_rub} RUB"
         ),
+        "admin_panel_closed": "Админ-панель закрыта.",
+        "admin_panel_back_to_user": "Вы вернулись в обычное меню.",
         "usage_ban": "Использование: /ban <tg_id> <причина>",
         "usage_unban": "Использование: /unban <tg_id>",
         "user_not_found": "Пользователь не найден.",
@@ -329,6 +407,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "btn_language": "Language",
         "role_customer": "Customer",
         "role_artist": "Artist",
+        "role_admin": "Admin",
         "order_decision_accept": "Accept",
         "order_decision_reject": "Reject",
         "art_kind_preview": "Preview",
@@ -425,7 +504,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "New request #{order_id}\n"
             "From: {customer_name} (@{customer_username})\n"
             "Title: {title}\n"
-            "Details: {details}\n"
             "Price: {price} RUB"
         ),
         "create_send_to_artist_failed": "Could not send request in DM. Ask artist to run /start with bot.",
@@ -516,7 +594,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_sender_artist": "Artist",
         "relay_forward": "[Relay order #{order_id}] {sender_role} {sender_name}:\n{text}",
         "relay_media_forward": "[Relay order #{order_id}] {sender_role} {sender_name} sent a media file.",
-        "relay_sent": "Message sent.",
+        "relay_media_use_send_art": "Use the \"Send Artwork\" button to deliver the work.",
+        # "relay_sent": "Message sent.",
         "relay_done_not_paid": "Completion is available only after escrow payment.",
         "relay_done_already": "You already confirmed completion for this order.",
         "relay_done_marked": "Your completion confirmation is saved.",
@@ -585,6 +664,81 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "search_ask_query": "Enter artist search query (nickname/username/contact):",
         "search_query_short": "Query is too short. Minimum 2 characters.",
         "admin_only": "Command is available only to admin.",
+        "admin_panel_entering": "Opening admin panel...",
+        "admin_panel_welcome": "You are in admin panel. Choose a section:",
+        "admin_btn_disputes": "Open Disputes",
+        "admin_btn_reports": "Reports",
+        "admin_btn_blocks": "Block/Unblock Users",
+        "admin_btn_users": "Users DB",
+        "admin_btn_exit_panel": "Exit Admin Panel",
+        "admin_btn_back": "Back",
+        "admin_btn_prev": "Previous",
+        "admin_btn_next": "Next",
+        "admin_btn_search": "Find User",
+        "admin_btn_resolve_refund": "Decision: refund",
+        "admin_btn_resolve_release": "Decision: release",
+        "admin_btn_dispute_close": "Close Dispute",
+        "admin_btn_report_close": "Remove Report",
+        "admin_btn_toggle_found_user": "Block/Unblock User",
+        "admin_btn_back_blocks": "Back to blocks",
+        "admin_btn_back_users": "Back to users",
+        "admin_btn_back_section": "Back to section",
+        "admin_btn_back_disputes": "Back to disputes",
+        "admin_disputes_empty": "No open disputes right now.",
+        "admin_disputes_title": "Open disputes ({count}):",
+        "admin_disputes_row": (
+            "- Order #{order_id} | customer: {customer_ref} | artist: {artist_ref} | {price} RUB"
+        ),
+        "admin_dispute_row_button": "Open dispute #{order_id}",
+        "admin_dispute_card": (
+            "Dispute for order #{order_id}\n"
+            "Status: {status}\n"
+            "Customer: {customer_ref}\n"
+            "Artist: {artist_ref}\n"
+            "Title: {title}\n"
+            "Price: {price} RUB\n"
+            "Artist files in ZIP: {assets}"
+        ),
+        "admin_dispute_not_open": "This dispute is already closed.",
+        "admin_dispute_closed": "Dispute closed.",
+        "admin_dispute_closed_text": "Dispute for order #{order_id} was closed without decision. Order returned to work.",
+        "admin_dispute_closed_notify": "Admin closed dispute for order #{order_id}. Order returned to work.",
+        "admin_dispute_zip_caption": "Dispute #{order_id}: ZIP with artist media ({files} files).",
+        "admin_dispute_zip_empty": "No available artist media was found for dispute #{order_id}.",
+        "admin_reports_empty": "No reports yet.",
+        "admin_report_not_found": "Report not found.",
+        "admin_report_closed": "Report removed.",
+        "admin_reports_card": (
+            "Report {index}/{total}\n"
+            "Report ID: #{report_id}\n"
+            "Created at: {created_at}\n"
+            "Order ID: {order_id}\n"
+            "Reporter: {reporter_ref}\n"
+            "Target: {target_ref}\n"
+            "Status: {status}\n"
+            "Reason:\n"
+            "{reason}"
+        ),
+        "admin_users_empty": "No records in users table.",
+        "admin_users_header": "Users ({start}-{end} of {total}):",
+        "admin_users_row": "ID={user_id} | {user_ref} | role={role} | status={status}",
+        "admin_user_active": "active",
+        "admin_user_blocked": "blocked",
+        "admin_user_no_username": "no username",
+        "admin_user_open_profile": "Open Profile",
+        "admin_toggle_user": "{username} ({status})",
+        "admin_toggle_done": "User {username}: status updated -> {status}",
+        "admin_search_prompt": "Enter user @username or TG ID:",
+        "admin_search_invalid": "Invalid format. Enter @username or numeric TG ID.",
+        "admin_user_not_found_search": "User not found.",
+        "admin_user_found_card": (
+            "User found:\n"
+            "DB ID: {user_id}\n"
+            "Profile: {user_ref}\n"
+            "Role: {role}\n"
+            "Status: {status}"
+        ),
+        "admin_block_reason": "Blocked from admin panel",
         "admin_stats": (
             "[ADMIN] Statistics\n"
             "Total orders: {total_orders}\n"
@@ -592,6 +746,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Disputed: {disputed_orders}\n"
             "Gross turnover: {gross_rub} RUB"
         ),
+        "admin_panel_closed": "Admin panel closed.",
+        "admin_panel_back_to_user": "Returned to user menu.",
         "usage_ban": "Usage: /ban <tg_id> <reason>",
         "usage_unban": "Usage: /unban <tg_id>",
         "user_not_found": "User not found.",
