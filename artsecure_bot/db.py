@@ -26,6 +26,8 @@ async def init_db(database_url: str) -> None:
                 await conn.execute(text("ALTER TABLE orders ADD COLUMN customer_done BOOLEAN DEFAULT 0"))
             if "artist_done" not in columns:
                 await conn.execute(text("ALTER TABLE orders ADD COLUMN artist_done BOOLEAN DEFAULT 0"))
+            if "status_before_dispute" not in columns:
+                await conn.execute(text("ALTER TABLE orders ADD COLUMN status_before_dispute VARCHAR(32)"))
         except Exception:
             # Non-SQLite engines should be migrated separately.
             pass

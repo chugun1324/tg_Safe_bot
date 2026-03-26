@@ -10,7 +10,6 @@ class RegistrationState(StatesGroup):
 class CreateOrderState(StatesGroup):
     waiting_artist_username = State()
     waiting_title = State()
-    waiting_details = State()
     waiting_price = State()
 
 
@@ -37,3 +36,8 @@ class RelayState(StatesGroup):
 
 class NDAState(StatesGroup):
     waiting_order_id = State()
+
+
+class AdminState(StatesGroup):
+    waiting_blocks_query = State()
+    waiting_users_query = State()

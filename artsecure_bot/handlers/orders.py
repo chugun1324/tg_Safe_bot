@@ -144,22 +144,6 @@ async def create_order_title(message: Message, state: FSMContext) -> None:
         return
 
     await state.update_data(title=title)
-    await state.set_state(CreateOrderState.waiting_details)
-    await message.answer(tr("create_ask_details", lang), reply_markup=flow_menu(lang))
-
-
-@router.message(CreateOrderState.waiting_details)
-async def create_order_details(message: Message, state: FSMContext) -> None:
-    if message.from_user is None:
-        return
-    details = (message.text or "").strip()
-    async with session_scope() as session:
-        lang = await get_user_language(session, message.from_user.id)
-    if len(details) < 5:
-        await message.answer(tr("create_details_short", lang))
-        return
-
-    await state.update_data(details=details)
     await state.set_state(CreateOrderState.waiting_price)
     await message.answer(tr("create_ask_price", lang), reply_markup=flow_menu(lang))
 
@@ -186,9 +170,7 @@ async def create_order_price(message: Message, bot: Bot, state: FSMContext) -> N
         artist_tg_id = data.get("artist_tg_id")
         artist_username = data.get("artist_username")
         title = data.get("title")
-        details = data.get("details")
-
-        if not isinstance(artist_tg_id, int) or not title or not details:
+        if not isinstance(artist_tg_id, int) or not title:
             await message.answer(tr("create_expired", lang))
             await state.clear()
             return
@@ -211,7 +193,7 @@ async def create_order_price(message: Message, bot: Bot, state: FSMContext) -> N
             customer_id=customer.id,
             artist_id=artist.id,
             title=title,
-            details=details,
+            details="",
             price_rub=price,
         )
         customer_menu = await build_main_menu_for_user(session, customer)
@@ -239,7 +221,6 @@ async def create_order_price(message: Message, bot: Bot, state: FSMContext) -> N
                 customer_name=message.from_user.full_name,
                 customer_username=message.from_user.username or tr("no_username", artist_lang),
                 title=title,
-                details=details,
                 price=price,
             ),
             reply_markup=order_decision_keyboard(order.id, artist_lang),
@@ -383,7 +364,7 @@ def _extract_order_id(message: Message) -> int | None:
 
 
 @router.message(Command("pay"))
-async def pay_order(message: Message, bot: Bot) -> None:
+async def pay_order(message: Message, bot: Bot, dispatcher: Dispatcher) -> None:
     order_id = _extract_order_id(message)
     async with session_scope() as session:
         lang = await get_user_language(session, message.from_user.id if message.from_user else 0)
@@ -415,15 +396,31 @@ async def pay_order(message: Message, bot: Bot) -> None:
         artist_tg = order.artist.tg_id
         artist_lang = await get_user_language(session, artist_tg)
 
+    await _activate_relay_context(dispatcher.fsm.get_context(bot=bot, chat_id=customer.tg_id, user_id=customer.tg_id), order_id)
+    await _activate_relay_context(dispatcher.fsm.get_context(bot=bot, chat_id=artist_tg, user_id=artist_tg), order_id)
+
+    customer_notice = await message.answer(
+        tr("relay_activated", lang, order_id=order_id, leave_label=tr("btn_leave_relay", lang)),
+        reply_markup=_relay_menu_for_order(lang, is_artist=False, status=OrderStatus.PAID_ESCROW),
+    )
+    artist_notice = await bot.send_message(
+        artist_tg,
+        tr("relay_activated", artist_lang, order_id=order_id, leave_label=tr("btn_leave_relay", artist_lang)),
+        protect_content=True,
+        reply_markup=_relay_menu_for_order(artist_lang, is_artist=True, status=OrderStatus.PAID_ESCROW),
+    )
+    await clear_chat_keep_message(bot, customer.tg_id, customer_notice.message_id)
+    await clear_chat_keep_message(bot, artist_tg, artist_notice.message_id)
+
     await message.answer(
         tr("pay_marked_done", lang, order_id=order_id, done_label=tr("btn_mark_done", lang)),
-        reply_markup=relay_menu(lang, can_send_art=False, can_mark_done=True),
+        reply_markup=_relay_menu_for_order(lang, is_artist=False, status=OrderStatus.PAID_ESCROW),
     )
     await bot.send_message(
         artist_tg,
         tr("pay_notify_artist", artist_lang, order_id=order_id, price=order.price_rub),
         protect_content=True,
-        reply_markup=relay_menu(artist_lang, can_send_art=True, can_mark_done=True),
+        reply_markup=_relay_menu_for_order(artist_lang, is_artist=True, status=OrderStatus.PAID_ESCROW),
     )
 
 
@@ -467,6 +464,8 @@ async def dispute_order(message: Message, bot: Bot, settings: Settings) -> None:
             await message.answer(tr("dispute_not_participant", lang))
             return
 
+        if order.status != OrderStatus.DISPUTED:
+            order.status_before_dispute = order.status
         order.status = OrderStatus.DISPUTED
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
@@ -523,6 +522,7 @@ async def force_close_order(message: Message, bot: Bot) -> None:
             return
 
         order.status = OrderStatus.CANCELLED
+        order.status_before_dispute = None
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
@@ -540,7 +540,7 @@ async def force_close_order(message: Message, bot: Bot) -> None:
 
 
 @router.callback_query(F.data.startswith("pay:"))
-async def pay_callback(callback: CallbackQuery, bot: Bot) -> None:
+async def pay_callback(callback: CallbackQuery, bot: Bot, dispatcher: Dispatcher) -> None:
     if callback.from_user is None or callback.data is None:
         return
     order_id = _parse_callback_order_id(callback.data, "pay")
@@ -583,10 +583,31 @@ async def pay_callback(callback: CallbackQuery, bot: Bot) -> None:
     await callback.answer()
     if callback.message is not None:
         await callback.message.edit_reply_markup(reply_markup=updated_markup)
-        await callback.message.answer(
-            tr("pay_marked_done", lang, order_id=order_id, done_label=tr("btn_mark_done", lang)),
-            reply_markup=_relay_menu_for_order(lang, is_artist=False, status=OrderStatus.PAID_ESCROW),
-        )
+
+    await _activate_relay_context(dispatcher.fsm.get_context(bot=bot, chat_id=callback.from_user.id, user_id=callback.from_user.id), order_id)
+    await _activate_relay_context(dispatcher.fsm.get_context(bot=bot, chat_id=artist_tg, user_id=artist_tg), order_id)
+
+    customer_notice = await bot.send_message(
+        callback.from_user.id,
+        tr("relay_activated", lang, order_id=order_id, leave_label=tr("btn_leave_relay", lang)),
+        protect_content=True,
+        reply_markup=_relay_menu_for_order(lang, is_artist=False, status=OrderStatus.PAID_ESCROW),
+    )
+    artist_notice = await bot.send_message(
+        artist_tg,
+        tr("relay_activated", artist_lang, order_id=order_id, leave_label=tr("btn_leave_relay", artist_lang)),
+        protect_content=True,
+        reply_markup=_relay_menu_for_order(artist_lang, is_artist=True, status=OrderStatus.PAID_ESCROW),
+    )
+    await clear_chat_keep_message(bot, callback.from_user.id, customer_notice.message_id)
+    await clear_chat_keep_message(bot, artist_tg, artist_notice.message_id)
+
+    await bot.send_message(
+        callback.from_user.id,
+        tr("pay_marked_done", lang, order_id=order_id, done_label=tr("btn_mark_done", lang)),
+        protect_content=True,
+        reply_markup=_relay_menu_for_order(lang, is_artist=False, status=OrderStatus.PAID_ESCROW),
+    )
     await bot.send_message(
         artist_tg,
         tr("pay_notify_artist", artist_lang, order_id=order_id, price=price_rub),
@@ -665,6 +686,8 @@ async def dispute_callback(callback: CallbackQuery, bot: Bot, settings: Settings
             await callback.answer(tr("relay_order_closed", lang), show_alert=True)
             return
 
+        if order.status != OrderStatus.DISPUTED:
+            order.status_before_dispute = order.status
         order.status = OrderStatus.DISPUTED
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
@@ -774,6 +797,10 @@ async def delete_order_callback(callback: CallbackQuery, bot: Bot) -> None:
 
     await callback.answer()
     if callback.message is not None:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
         await callback.message.answer(tr("delete_order_done", lang, order_id=order_id), reply_markup=menu)
     await bot.send_message(
         artist_tg,
