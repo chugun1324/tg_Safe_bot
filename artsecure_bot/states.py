@@ -9,6 +9,7 @@ class RegistrationState(StatesGroup):
 
 class CreateOrderState(StatesGroup):
     waiting_artist_username = State()
+    waiting_currency = State()
     waiting_title = State()
     waiting_price = State()
 
@@ -41,3 +42,7 @@ class NDAState(StatesGroup):
 class AdminState(StatesGroup):
     waiting_blocks_query = State()
     waiting_users_query = State()
+
+
+class WalletState(StatesGroup):
+    waiting_address = State()

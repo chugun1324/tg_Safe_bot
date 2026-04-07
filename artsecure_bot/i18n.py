@@ -23,10 +23,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "btn_report": "Жалоба",
         "btn_send_art": "Отправить работу",
         "btn_admin_stats": "Статистика",
+        "btn_wallet": "Кошелек",
         "btn_language": "Язык",
+        "btn_pay_wallet": "Оплатить через Wallet",
+        "btn_pay_tonkeeper": "Оплатить через Tonkeeper",
+        "btn_invoice_status": "Проверить оплату",
         "role_customer": "Заказчик",
         "role_artist": "Исполнитель",
         "role_admin": "Админ",
+        "currency_rub": "РУБ",
+        "currency_usd": "USD",
         "order_decision_accept": "Принять",
         "order_decision_reject": "Отклонить",
         "art_kind_preview": "Предпросмотр",
@@ -67,13 +73,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "{btn_send_art} / /send_art\n"
             "{btn_search} / /search\n"
             "{btn_report} / /report\n"
-            "/relay <id> - защищенный relay-чат по заказу\n"
+            "/relay &lt;id&gt; - защищенный relay-чат по заказу\n"
             "/leave_relay - выйти из relay-чата\n"
-            "/pay <id> - имитация escrow оплаты\n"
-            "/release <id> - релиз средств исполнителю\n"
-            "/dispute <id> - открыть спор\n"
-            "/force_close <id> - принудительно закрыть заказ\n"
-            "/nda <id> - шаблон NDA в PDF\n"
+            "/pay &lt;id&gt; - имитация escrow оплаты\n"
+            "/invoice &lt;id&gt; - создать крипто-инвойс escrow\n"
+            "/invoice_status &lt;id&gt; - статус инвойса\n"
+            "/mock_paid &lt;id&gt; - подтвердить оплату в mock-режиме\n"
+            "/set_wallet &lt;address&gt; - подключить кошелек заказчика\n"
+            "/wallet - показать подключенный кошелек\n"
+            "/release &lt;id&gt; - релиз средств исполнителю\n"
+            "/dispute &lt;id&gt; - открыть спор\n"
+            "/force_close &lt;id&gt; - принудительно закрыть заказ\n"
+            "/nda &lt;id&gt; - шаблон NDA в PDF\n"
             "/langue - смена языка\n"
             "Поддержка: {support_chat_url}"
         ),
@@ -103,11 +114,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "username_not_artist_role": "Этот пользователь зарегистрирован, но не в роли исполнителя.",
         "create_ask_title": "Введите название заказа:",
+        "create_ask_currency": "Выберите валюту заказа:",
+        "create_currency_selected": "Валюта выбрана: {currency}",
+        "currency_invalid": "Неверная валюта.",
         "create_title_short": "Название слишком короткое.",
         "create_ask_details": "Опишите детали заказа:",
         "create_details_short": "Опишите заказ чуть подробнее (минимум 5 символов).",
         "create_ask_price": "Введите цену в рублях (например 3500):",
-        "price_int_only": "Цена должна быть целым числом в рублях.",
+        "create_ask_price_currency": "Введите цену в валюте {currency} (число, до 6 знаков после запятой):",
+        "price_int_only": "Цена должна быть числом (до 6 знаков после запятой).",
         "price_positive": "Цена должна быть больше нуля.",
         "create_expired": "Сценарий устарел. Начните заново: /create",
         "create_user_not_found": "Не удалось создать заказ: пользователь не найден.",
@@ -116,14 +131,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Заявка #{order_id} создана и отправлена исполнителю.\n"
             "Исполнитель: @{artist_username}\n"
             "Название: {title}\n"
-            "Цена: {price} RUB\n"
+            "Цена: {price} {currency}\n"
             "Ожидайте принятия заявки."
         ),
         "create_send_to_artist": (
             "Новая заявка #{order_id}\n"
             "От: {customer_name} (@{customer_username})\n"
             "Название: {title}\n"
-            "Цена: {price} RUB"
+            "Цена: {price} {currency}"
         ),
         "create_send_to_artist_failed": (
             "Не удалось отправить заявку исполнителю в ЛС. "
@@ -155,17 +170,65 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Заказ #{order_id}\n"
             "Статус: {status}\n"
             "Название: {title}\n"
-            "Цена: {price} RUB\n"
+            "Цена: {price} {currency}\n"
             "Заказчик: {customer}\n"
             "Исполнитель: {artist}"
         ),
         "my_orders_footer": "Выше список ваших заказов.",
-        "usage_pay": "Использование: /pay <order_id>",
-        "usage_release": "Использование: /release <order_id>",
-        "usage_dispute": "Использование: /dispute <order_id>",
-        "usage_force_close": "Использование: /force_close <order_id>",
-        "usage_nda": "Использование: /nda <order_id>",
+        "usage_pay": "Использование: /pay &lt;order_id&gt;",
+        "usage_invoice": "Использование: /invoice &lt;order_id&gt;",
+        "usage_invoice_status": "Использование: /invoice_status &lt;invoice_id&gt;",
+        "usage_mock_paid": "Использование: /mock_paid &lt;invoice_id&gt;",
+        "usage_set_wallet": "Использование: /set_wallet &lt;your_wallet_address&gt;",
+        "usage_release": "Использование: /release &lt;order_id&gt;",
+        "usage_dispute": "Использование: /dispute &lt;order_id&gt;",
+        "usage_force_close": "Использование: /force_close &lt;order_id&gt;",
+        "usage_nda": "Использование: /nda &lt;order_id&gt;",
         "pay_not_your_order": "Это не ваш заказ.",
+        "payment_wallet_not_configured": "Escrow-кошелек пока не настроен в .env (ESCROW_WALLET_ADDRESS).",
+        "wallet_not_connected": "Сначала подключите кошелек: /set_wallet &lt;wallet_address&gt;",
+        "wallet_connected": "Ваш кошелек: {wallet_address}",
+        "wallet_saved": "Кошелек сохранен: {wallet_address}",
+        "wallet_address_invalid": "Некорректный адрес кошелька.",
+        "wallet_address_not_found": "Кошелек не найден в сети TON. Проверьте адрес.",
+        "wallet_check_unavailable": "Не удалось проверить кошелек через TON API. Попробуйте позже.",
+        "wallet_address_not_found_soft": (
+            "Внимание: TON API не подтвердил существование кошелька. "
+            "Адрес сохранен, но перед сделкой сделайте тестовый перевод."
+        ),
+        "wallet_check_unavailable_soft": (
+            "Внимание: TON API сейчас недоступен. Адрес сохранен без онлайн-проверки."
+        ),
+        "wallet_enter_prompt": "Введите адрес TON-кошелька для переводов:",
+        "wallet_not_enough_balance": "Недостаточно USDT на кошельке. Пополните Wallet и повторите оплату.",
+        "invoice_created": (
+            "Инвойс #{invoice_id} по заказу #{order_id} создан.\n"
+            "Сумма: {amount_usdt} USDT\n"
+            "Адрес: {payment_address}\n"
+            "Memo: {payment_memo}\n"
+            "Срок до: {expires_at}\n"
+            "Режим: {mode}\n"
+            "Рекомендуется кнопка Tonkeeper (обычно без фикс-комиссии 1 USDT).\n"
+            "Кнопка оплаты открывает Wallet, перевод выполните вручную по реквизитам выше.\n"
+            "Проверка статуса: /invoice_status {invoice_id}"
+        ),
+        "invoice_not_found": "Инвойс не найден.",
+        "invoice_status_card": (
+            "Инвойс #{invoice_id}\n"
+            "Заказ: #{order_id}\n"
+            "Статус: {status}\n"
+            "Сумма: {amount_usdt} USDT\n"
+            "Memo: {payment_memo}\n"
+            "Tx: {tx_hash}\n"
+            "Срок до: {expires_at}"
+        ),
+        "mock_only_mode": "Команда доступна только в PAYMENTS_MODE=mock.",
+        "mock_paid_done": (
+            "MOCK-оплата подтверждена.\n"
+            "Инвойс #{invoice_id}, заказ #{order_id}\n"
+            "Tx: {tx_hash}"
+        ),
+        "mock_paid_notify_artist": "Заказ #{order_id}: escrow отмечен как оплаченный (mock).",
         "pay_not_available_status": "Оплата доступна только для заказов в работе/после предпросмотра.",
         "pay_marked_done": (
             "Escrow для заказа #{order_id} отмечен как оплаченный.\n"
@@ -198,10 +261,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "delete_only_customer": "Удалять заказ может только заказчик.",
         "delete_order_done": "Заказ #{order_id} удален из списка.",
         "delete_order_notify_artist": "Заказ #{order_id} был удален заказчиком и скрыт из ваших списков.",
-        "cb_use_pay": "Используйте команду /pay <id>",
-        "cb_use_release": "Используйте команду /release <id>",
-        "cb_use_dispute": "Используйте команду /dispute <id>",
-        "relay_usage": "Использование: /relay <order_id>",
+        "cb_use_pay": "Используйте команду /pay &lt;id&gt;",
+        "cb_use_release": "Используйте команду /release &lt;id&gt;",
+        "cb_use_dispute": "Используйте команду /dispute &lt;id&gt;",
+        "relay_usage": "Использование: /relay &lt;order_id&gt;",
         "relay_not_available_status": "Relay-чат станет доступен после принятия заказа исполнителем.",
         "relay_order_closed": "Этот заказ уже закрыт.",
         "relay_activated": (
@@ -212,7 +275,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_off": "Relay-чат выключен.",
         "relay_send_text_or_media": "Отправьте текстовое сообщение или медиафайл.",
         "relay_use_leave": "Для выхода используйте /leave_relay",
-        "relay_session_expired": "Сессия relay устарела. Используйте /relay <order_id>.",
+        "relay_session_expired": "Сессия relay устарела. Используйте /relay &lt;order_id&gt;.",
         "relay_not_participant_anymore": "Вы больше не участник этого заказа.",
         "relay_sender_customer": "Заказчик",
         "relay_sender_artist": "Исполнитель",
@@ -233,6 +296,24 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_done_archive_caption": "Архив оригиналов по заказу #{order_id} (без масок).",
         "relay_done_archive_missing": "Не удалось собрать архив: исходные файлы недоступны.",
         "relay_done_archive_sent_artist": "Заказ #{order_id}: архив всех медиа отправлен заказчику.",
+        "relay_payout_customer": (
+            "Escrow релиз выполнен: исполнителю отправлено {amount_usdt} USDT.\n"
+            "Tx: {tx_hash}"
+        ),
+        "relay_payout_artist": (
+            "Выплата по заказу выполнена: {amount_usdt} USDT.\n"
+            "Tx: {tx_hash}"
+        ),
+        "relay_payout_retry_later": (
+            "Автовыплата временно недоступна (проблема сети/API).\n"
+            "Заказ не закрыт. Нажмите «{done_label}» позже, чтобы повторить выплату."
+        ),
+        "payout_auto_failed_customer": (
+            "Автовыплата исполнителю не выполнена. Платеж отмечен как требующий ручной обработки админом."
+        ),
+        "payout_auto_failed_artist": (
+            "Автовыплата не выполнена. Админ выполнит перевод вручную и отправит tx hash."
+        ),
         "send_art_ask_order": "Введите ID заказа, по которому отправляете файл:",
         "order_id_must_be_number": "ID заказа должен быть числом.",
         "send_art_choose_kind": "Выберите тип отправки:",
@@ -257,7 +338,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "send_art_preview_done": (
             "Предпросмотр отправлен заказчику.\n"
-            "Дальше: заказчик подтверждает оплату escrow через /pay <order_id>."
+            "Дальше: заказчик подтверждает оплату escrow через /pay &lt;order_id&gt;."
         ),
         "send_art_preview_notify_customer": (
             "Заказ #{order_id}: после проверки предпросмотра используйте /pay {order_id}, "
@@ -372,18 +453,31 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "admin_panel_closed": "Админ-панель закрыта.",
         "admin_panel_back_to_user": "Вы вернулись в обычное меню.",
-        "usage_ban": "Использование: /ban <tg_id> <причина>",
-        "usage_unban": "Использование: /unban <tg_id>",
+        "usage_ban": "Использование: /ban &lt;tg_id&gt; &lt;причина&gt;",
+        "usage_unban": "Использование: /unban &lt;tg_id&gt;",
         "user_not_found": "Пользователь не найден.",
         "user_banned": "Пользователь {tg_id} заблокирован.",
         "user_banned_notify": "Вы заблокированы в ArtSecure. Причина: {reason}",
         "user_unbanned": "Пользователь {tg_id} разблокирован.",
-        "usage_resolve": "Использование: /resolve <order_id> <refund|release>",
-        "admin_refund_customer": "[ADMIN] Спор по заказу #{order_id} закрыт: возврат средств заказчику.",
-        "admin_refund_artist": "[ADMIN] Спор по заказу #{order_id} закрыт: средства возвращены заказчику.",
-        "admin_release_customer": "[ADMIN] Спор по заказу #{order_id} закрыт: релиз исполнителю ({payout} RUB).",
-        "admin_release_artist": "[ADMIN] Спор по заказу #{order_id} закрыт: релиз средств ({payout} RUB).",
+        "usage_resolve": "Использование: /resolve &lt;order_id&gt; &lt;refund|release&gt;",
+        "admin_refund_customer": (
+            "[ADMIN] Спор по заказу #{order_id} закрыт: возврат {amount_usdt} USDT заказчику.\n"
+            "Tx: {tx_hash}"
+        ),
+        "admin_refund_artist": (
+            "[ADMIN] Спор по заказу #{order_id} закрыт: средства возвращены заказчику ({amount_usdt} USDT).\n"
+            "Tx: {tx_hash}"
+        ),
+        "admin_release_customer": (
+            "[ADMIN] Спор по заказу #{order_id} закрыт: релиз исполнителю {payout_usdt} USDT.\n"
+            "Tx: {tx_hash}"
+        ),
+        "admin_release_artist": (
+            "[ADMIN] Спор по заказу #{order_id} закрыт: релиз средств {payout_usdt} USDT.\n"
+            "Tx: {tx_hash}"
+        ),
         "admin_resolve_done": "Спор по заказу #{order_id} закрыт решением: {decision}",
+        "admin_payment_invoice_missing": "Внимание: у заказа #{order_id} не найден подтвержденный escrow-инвойс.",
         "nda_not_available": "NDA доступен только участникам заказа.",
         "nda_generated": "Шаблон NDA сгенерирован. Подпишите и согласуйте условия в чате.",
     },
@@ -404,10 +498,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "btn_report": "Report",
         "btn_send_art": "Send Artwork",
         "btn_admin_stats": "Stats",
+        "btn_wallet": "Wallet",
         "btn_language": "Language",
+        "btn_pay_wallet": "Pay via Wallet",
+        "btn_pay_tonkeeper": "Pay via Tonkeeper",
+        "btn_invoice_status": "Check Payment",
         "role_customer": "Customer",
         "role_artist": "Artist",
         "role_admin": "Admin",
+        "currency_rub": "RUB",
+        "currency_usd": "USD",
         "order_decision_accept": "Accept",
         "order_decision_reject": "Reject",
         "art_kind_preview": "Preview",
@@ -448,13 +548,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "{btn_send_art} / /send_art\n"
             "{btn_search} / /search\n"
             "{btn_report} / /report\n"
-            "/relay <id> - secure relay chat by order\n"
+            "/relay &lt;id&gt; - secure relay chat by order\n"
             "/leave_relay - leave relay chat\n"
-            "/pay <id> - mock escrow payment\n"
-            "/release <id> - release funds to artist\n"
-            "/dispute <id> - open dispute\n"
-            "/force_close <id> - force close order\n"
-            "/nda <id> - NDA PDF template\n"
+            "/pay &lt;id&gt; - mock escrow payment\n"
+            "/invoice &lt;id&gt; - create crypto escrow invoice\n"
+            "/invoice_status &lt;id&gt; - invoice status\n"
+            "/mock_paid &lt;id&gt; - confirm payment in mock mode\n"
+            "/set_wallet &lt;address&gt; - connect customer wallet\n"
+            "/wallet - show connected wallet\n"
+            "/release &lt;id&gt; - release funds to artist\n"
+            "/dispute &lt;id&gt; - open dispute\n"
+            "/force_close &lt;id&gt; - force close order\n"
+            "/nda &lt;id&gt; - NDA PDF template\n"
             "/langue - switch language\n"
             "Support: {support_chat_url}"
         ),
@@ -484,11 +589,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "username_not_artist_role": "This user is registered but not as artist.",
         "create_ask_title": "Enter order title:",
+        "create_ask_currency": "Choose order currency:",
+        "create_currency_selected": "Currency selected: {currency}",
+        "currency_invalid": "Invalid currency.",
         "create_title_short": "Title is too short.",
         "create_ask_details": "Describe order details:",
         "create_details_short": "Please describe in more detail (min 5 characters).",
         "create_ask_price": "Enter price in RUB (for example 3500):",
-        "price_int_only": "Price must be an integer in RUB.",
+        "create_ask_price_currency": "Enter price in {currency} (number, up to 6 decimals):",
+        "price_int_only": "Price must be a number (up to 6 decimals).",
         "price_positive": "Price must be greater than zero.",
         "create_expired": "Scenario expired. Start again: /create",
         "create_user_not_found": "Unable to create order: user not found.",
@@ -497,14 +606,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Request #{order_id} created and sent to artist.\n"
             "Artist: @{artist_username}\n"
             "Title: {title}\n"
-            "Price: {price} RUB\n"
+            "Price: {price} {currency}\n"
             "Wait for artist decision."
         ),
         "create_send_to_artist": (
             "New request #{order_id}\n"
             "From: {customer_name} (@{customer_username})\n"
             "Title: {title}\n"
-            "Price: {price} RUB"
+            "Price: {price} {currency}"
         ),
         "create_send_to_artist_failed": "Could not send request in DM. Ask artist to run /start with bot.",
         "order_decision_invalid_format": "Invalid format",
@@ -531,17 +640,65 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Order #{order_id}\n"
             "Status: {status}\n"
             "Title: {title}\n"
-            "Price: {price} RUB\n"
+            "Price: {price} {currency}\n"
             "Customer: {customer}\n"
             "Artist: {artist}"
         ),
         "my_orders_footer": "Your orders are listed above.",
-        "usage_pay": "Usage: /pay <order_id>",
-        "usage_release": "Usage: /release <order_id>",
-        "usage_dispute": "Usage: /dispute <order_id>",
-        "usage_force_close": "Usage: /force_close <order_id>",
-        "usage_nda": "Usage: /nda <order_id>",
+        "usage_pay": "Usage: /pay &lt;order_id&gt;",
+        "usage_invoice": "Usage: /invoice &lt;order_id&gt;",
+        "usage_invoice_status": "Usage: /invoice_status &lt;invoice_id&gt;",
+        "usage_mock_paid": "Usage: /mock_paid &lt;invoice_id&gt;",
+        "usage_set_wallet": "Usage: /set_wallet &lt;your_wallet_address&gt;",
+        "usage_release": "Usage: /release &lt;order_id&gt;",
+        "usage_dispute": "Usage: /dispute &lt;order_id&gt;",
+        "usage_force_close": "Usage: /force_close &lt;order_id&gt;",
+        "usage_nda": "Usage: /nda &lt;order_id&gt;",
         "pay_not_your_order": "This is not your order.",
+        "payment_wallet_not_configured": "Escrow wallet is not configured in .env (ESCROW_WALLET_ADDRESS).",
+        "wallet_not_connected": "Connect wallet first: /set_wallet &lt;wallet_address&gt;",
+        "wallet_connected": "Your wallet: {wallet_address}",
+        "wallet_saved": "Wallet saved: {wallet_address}",
+        "wallet_address_invalid": "Invalid wallet address.",
+        "wallet_address_not_found": "Wallet was not found in TON network. Check the address.",
+        "wallet_check_unavailable": "Unable to verify wallet via TON API now. Please try again later.",
+        "wallet_address_not_found_soft": (
+            "Warning: TON API did not confirm this wallet yet. "
+            "Address was saved, but make a small test transfer before real deal."
+        ),
+        "wallet_check_unavailable_soft": (
+            "Warning: TON API is unavailable now. Address was saved without online verification."
+        ),
+        "wallet_enter_prompt": "Enter TON wallet address for transfers:",
+        "wallet_not_enough_balance": "Not enough USDT in wallet. Please top up Wallet and retry.",
+        "invoice_created": (
+            "Invoice #{invoice_id} for order #{order_id} created.\n"
+            "Amount: {amount_usdt} USDT\n"
+            "Address: {payment_address}\n"
+            "Memo: {payment_memo}\n"
+            "Expires at: {expires_at}\n"
+            "Mode: {mode}\n"
+            "Tonkeeper button is recommended (usually no fixed 1 USDT Wallet fee).\n"
+            "Pay button opens Wallet, complete transfer manually with details above.\n"
+            "Check status: /invoice_status {invoice_id}"
+        ),
+        "invoice_not_found": "Invoice not found.",
+        "invoice_status_card": (
+            "Invoice #{invoice_id}\n"
+            "Order: #{order_id}\n"
+            "Status: {status}\n"
+            "Amount: {amount_usdt} USDT\n"
+            "Memo: {payment_memo}\n"
+            "Tx: {tx_hash}\n"
+            "Expires at: {expires_at}"
+        ),
+        "mock_only_mode": "This command is available only in PAYMENTS_MODE=mock.",
+        "mock_paid_done": (
+            "MOCK payment confirmed.\n"
+            "Invoice #{invoice_id}, order #{order_id}\n"
+            "Tx: {tx_hash}"
+        ),
+        "mock_paid_notify_artist": "Order #{order_id}: escrow marked as paid (mock).",
         "pay_not_available_status": "Payment is available only for in-progress/preview orders.",
         "pay_marked_done": (
             "Escrow for order #{order_id} marked as paid.\n"
@@ -574,10 +731,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "delete_only_customer": "Only customer can delete order.",
         "delete_order_done": "Order #{order_id} was deleted from lists.",
         "delete_order_notify_artist": "Order #{order_id} was deleted by customer and removed from your lists.",
-        "cb_use_pay": "Use /pay <id>",
-        "cb_use_release": "Use /release <id>",
-        "cb_use_dispute": "Use /dispute <id>",
-        "relay_usage": "Usage: /relay <order_id>",
+        "cb_use_pay": "Use /pay &lt;id&gt;",
+        "cb_use_release": "Use /release &lt;id&gt;",
+        "cb_use_dispute": "Use /dispute &lt;id&gt;",
+        "relay_usage": "Usage: /relay &lt;order_id&gt;",
         "relay_not_available_status": "Relay chat becomes available after artist accepts the order.",
         "relay_order_closed": "This order is already closed.",
         "relay_activated": (
@@ -588,7 +745,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_off": "Relay chat disabled.",
         "relay_send_text_or_media": "Send a text message or media file.",
         "relay_use_leave": "Use /leave_relay to exit",
-        "relay_session_expired": "Relay session expired. Use /relay <order_id>.",
+        "relay_session_expired": "Relay session expired. Use /relay &lt;order_id&gt;.",
         "relay_not_participant_anymore": "You are no longer participant of this order.",
         "relay_sender_customer": "Customer",
         "relay_sender_artist": "Artist",
@@ -609,6 +766,24 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_done_archive_caption": "Original files archive for order #{order_id} (without watermarks).",
         "relay_done_archive_missing": "Could not build archive: original files are unavailable.",
         "relay_done_archive_sent_artist": "Order #{order_id}: archive with all media was sent to customer.",
+        "relay_payout_customer": (
+            "Escrow released: {amount_usdt} USDT sent to artist.\n"
+            "Tx: {tx_hash}"
+        ),
+        "relay_payout_artist": (
+            "Order payout completed: {amount_usdt} USDT.\n"
+            "Tx: {tx_hash}"
+        ),
+        "relay_payout_retry_later": (
+            "Automatic payout is temporarily unavailable (network/API issue).\n"
+            "Order is not closed. Press \"{done_label}\" later to retry payout."
+        ),
+        "payout_auto_failed_customer": (
+            "Automatic payout to artist failed. Payment is marked for manual admin processing."
+        ),
+        "payout_auto_failed_artist": (
+            "Automatic payout failed. Admin will send funds manually and share tx hash."
+        ),
         "send_art_ask_order": "Enter order ID for artwork upload:",
         "order_id_must_be_number": "Order ID must be a number.",
         "send_art_choose_kind": "Choose upload type:",
@@ -633,7 +808,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "send_art_preview_done": (
             "Preview sent to customer.\n"
-            "Next: customer confirms escrow payment via /pay <order_id>."
+            "Next: customer confirms escrow payment via /pay &lt;order_id&gt;."
         ),
         "send_art_preview_notify_customer": (
             "Order #{order_id}: after preview check use /pay {order_id}, "
@@ -748,18 +923,31 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "admin_panel_closed": "Admin panel closed.",
         "admin_panel_back_to_user": "Returned to user menu.",
-        "usage_ban": "Usage: /ban <tg_id> <reason>",
-        "usage_unban": "Usage: /unban <tg_id>",
+        "usage_ban": "Usage: /ban &lt;tg_id&gt; &lt;reason&gt;",
+        "usage_unban": "Usage: /unban &lt;tg_id&gt;",
         "user_not_found": "User not found.",
         "user_banned": "User {tg_id} has been banned.",
         "user_banned_notify": "You are banned in ArtSecure. Reason: {reason}",
         "user_unbanned": "User {tg_id} has been unbanned.",
-        "usage_resolve": "Usage: /resolve <order_id> <refund|release>",
-        "admin_refund_customer": "[ADMIN] Dispute for order #{order_id} closed: refund to customer.",
-        "admin_refund_artist": "[ADMIN] Dispute for order #{order_id} closed: funds returned to customer.",
-        "admin_release_customer": "[ADMIN] Dispute for order #{order_id} closed: release to artist ({payout} RUB).",
-        "admin_release_artist": "[ADMIN] Dispute for order #{order_id} closed: funds released ({payout} RUB).",
+        "usage_resolve": "Usage: /resolve &lt;order_id&gt; &lt;refund|release&gt;",
+        "admin_refund_customer": (
+            "[ADMIN] Dispute for order #{order_id} closed: refund {amount_usdt} USDT to customer.\n"
+            "Tx: {tx_hash}"
+        ),
+        "admin_refund_artist": (
+            "[ADMIN] Dispute for order #{order_id} closed: funds returned to customer ({amount_usdt} USDT).\n"
+            "Tx: {tx_hash}"
+        ),
+        "admin_release_customer": (
+            "[ADMIN] Dispute for order #{order_id} closed: release {payout_usdt} USDT to artist.\n"
+            "Tx: {tx_hash}"
+        ),
+        "admin_release_artist": (
+            "[ADMIN] Dispute for order #{order_id} closed: funds released {payout_usdt} USDT.\n"
+            "Tx: {tx_hash}"
+        ),
         "admin_resolve_done": "Dispute for order #{order_id} resolved with decision: {decision}",
+        "admin_payment_invoice_missing": "Warning: no confirmed escrow invoice was found for order #{order_id}.",
         "nda_not_available": "NDA is available only to order participants.",
         "nda_generated": "NDA template generated. Sign and agree terms in chat.",
     },

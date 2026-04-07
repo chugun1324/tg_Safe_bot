@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import html
 import io
+import logging
 import os
+import secrets
 import zipfile
+from decimal import Decimal, ROUND_DOWN
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
@@ -22,10 +25,19 @@ from artsecure_bot.db import session_scope
 from artsecure_bot.handlers.utils import build_main_menu_for_user
 from artsecure_bot.i18n import tr, variants
 from artsecure_bot.models import ArtAsset, Order, OrderStatus, Report, ReportStatus, User, UserRole
+from artsecure_bot.payments import (
+    ManualRateProvider,
+    PaymentEscrowService,
+    PayoutConfigError,
+    PayoutTransferError,
+    send_usdt_from_escrow_batch,
+    send_usdt_from_escrow,
+)
 from artsecure_bot.services.chat_cleanup import clear_chat_keep_message
-from artsecure_bot.services.order_logic import calculate_commission, is_premium_active
+from artsecure_bot.services.price import format_price_value, order_price_amount
 from artsecure_bot.services.repository import (
     add_to_blacklist,
+    get_latest_confirmed_invoice_for_order,
     get_order_by_id,
     get_stats,
     get_user_by_id,
@@ -39,6 +51,7 @@ from artsecure_bot.services.repository import (
 from artsecure_bot.states import AdminState
 
 router = Router()
+logger = logging.getLogger(__name__)
 PAGE_SIZE = 10
 ADMIN_USERS_VIEW_LIMIT = 10
 
@@ -362,6 +375,112 @@ def _normalize_admin_user_query(raw: str) -> tuple[str, str] | None:
     return None
 
 
+def _build_rate_provider(settings: Settings) -> ManualRateProvider:
+    return ManualRateProvider(
+        rates_by_currency={
+            "RUB": settings.manual_usdt_rate_rub,
+            "USD": settings.manual_usdt_rate_usd,
+        }
+    )
+
+
+def _build_payment_service(settings: Settings) -> PaymentEscrowService:
+    return PaymentEscrowService(
+        wallet_address=settings.escrow_wallet_address,
+        invoice_ttl_minutes=settings.payment_invoice_ttl_minutes,
+        tolerance_bps=settings.payment_tolerance_bps,
+        rate_provider=_build_rate_provider(settings),
+        provider_name=settings.payment_provider_name,
+    )
+
+
+def _calculate_payout_amount_usdt(expected_amount_usdt: str, commission_pct: int) -> Decimal:
+    expected = Decimal(expected_amount_usdt)
+    pct = max(0, min(commission_pct, 100))
+    multiplier = Decimal("1") - (Decimal(pct) / Decimal("100"))
+    return (expected * multiplier).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+
+
+def _calculate_fee_amount_usdt(expected_amount_usdt: str, payout_amount_usdt: Decimal) -> Decimal:
+    expected = Decimal(expected_amount_usdt)
+    fee = (expected - payout_amount_usdt).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+    return max(fee, Decimal("0"))
+
+
+async def _resolve_escrow_payment(
+    *,
+    session,
+    settings: Settings,
+    order: Order,
+    decision: str,
+) -> tuple[str | None, str | None]:
+    invoice = await get_latest_confirmed_invoice_for_order(session, order.id)
+    if invoice is None:
+        return None, None
+
+    service = _build_payment_service(settings)
+    if decision == "refund":
+        if settings.payments_mode == "ton":
+            try:
+                tx_hash = await send_usdt_from_escrow(
+                    settings=settings,
+                    destination_wallet=invoice.payer_wallet_address or order.customer.wallet_address or "",
+                    amount_usdt=invoice.expected_amount_usdt,
+                    memo=f"order#{order.id}:refund",
+                )
+            except (PayoutConfigError, PayoutTransferError) as exc:
+                logger.exception(
+                    "Auto refund failed for order_id=%s invoice_id=%s: %s",
+                    order.id,
+                    invoice.id,
+                    exc,
+                )
+                tx_hash = f"manual-required-{secrets.token_hex(6)}"
+        else:
+            tx_hash = f"mock-refund-{invoice.id}-{secrets.token_hex(6)}"
+        await service.mark_refunded_mock(session, invoice=invoice, tx_hash=tx_hash)
+        return invoice.expected_amount_usdt, tx_hash
+
+    payout_amount = _calculate_payout_amount_usdt(invoice.expected_amount_usdt, order.commission_pct)
+    fee_amount = _calculate_fee_amount_usdt(invoice.expected_amount_usdt, payout_amount)
+    payout_amount_usdt = f"{payout_amount:.6f}"
+    fee_amount_usdt = f"{fee_amount:.6f}" if fee_amount > Decimal("0") else None
+    if settings.payments_mode == "ton":
+        try:
+            if fee_amount_usdt is not None:
+                tx_hash = await send_usdt_from_escrow_batch(
+                    settings=settings,
+                    transfers=[
+                        (order.artist.wallet_address or "", payout_amount_usdt, f"order#{order.id}:release"),
+                        (settings.cold_wallet_address, fee_amount_usdt, f"order#{order.id}:fee"),
+                    ],
+                )
+            else:
+                tx_hash = await send_usdt_from_escrow(
+                    settings=settings,
+                    destination_wallet=order.artist.wallet_address or "",
+                    amount_usdt=payout_amount_usdt,
+                    memo=f"order#{order.id}:release",
+                )
+        except (PayoutConfigError, PayoutTransferError) as exc:
+            logger.exception(
+                "Auto release failed for order_id=%s invoice_id=%s: %s",
+                order.id,
+                invoice.id,
+                exc,
+            )
+            tx_hash = f"manual-required-{secrets.token_hex(6)}"
+    else:
+        tx_hash = f"mock-release-{invoice.id}-{secrets.token_hex(6)}"
+    await service.mark_released_mock(
+        session,
+        invoice=invoice,
+        payout_amount_usdt=payout_amount_usdt,
+        tx_hash=tx_hash,
+    )
+    return payout_amount_usdt, tx_hash
+
+
 async def _build_artist_assets_zip(bot: Bot, order: Order) -> tuple[bytes | None, int]:
     artist_assets: list[ArtAsset] = [asset for asset in order.assets if asset.sender_id == order.artist_id]
     if not artist_assets:
@@ -570,7 +689,7 @@ async def admin_disputes(callback: CallbackQuery, state: FSMContext, settings: S
                 order_id=order.id,
                 customer_ref=_user_mention(order.customer, lang),
                 artist_ref=_user_mention(order.artist, lang),
-                price=order.price_rub,
+                price=format_price_value(order_price_amount(order)),
             )
         )
     await callback.message.edit_text(
@@ -607,7 +726,7 @@ async def admin_dispute_open(callback: CallbackQuery, bot: Bot, settings: Settin
             customer_ref=_user_mention(order.customer, lang),
             artist_ref=_user_mention(order.artist, lang),
             title=html.escape(order.title),
-            price=order.price_rub,
+            price=format_price_value(order_price_amount(order)),
             assets=added_files,
         )
 
@@ -685,31 +804,64 @@ async def admin_resolve_callback(callback: CallbackQuery, bot: Bot, settings: Se
         if order is None:
             await callback.answer(tr("order_not_found", lang), show_alert=True)
             return
+        if order.status != OrderStatus.DISPUTED:
+            await callback.answer(tr("admin_dispute_not_open", lang), show_alert=True)
+            return
 
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
         artist_lang = await get_user_language(session, artist_tg)
+        amount_usdt, tx_hash = await _resolve_escrow_payment(
+            session=session,
+            settings=settings,
+            order=order,
+            decision=decision,
+        )
 
         if decision == "refund":
             order.status = OrderStatus.CANCELLED
+            order.customer_done = False
+            order.artist_done = False
             order.status_before_dispute = None
-            customer_msg = tr("admin_refund_customer", customer_lang, order_id=order_id)
-            artist_msg = tr("admin_refund_artist", artist_lang, order_id=order_id)
+            customer_msg = tr(
+                "admin_refund_customer",
+                customer_lang,
+                order_id=order_id,
+                amount_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
+            )
+            artist_msg = tr(
+                "admin_refund_artist",
+                artist_lang,
+                order_id=order_id,
+                amount_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
+            )
         else:
             order.status = OrderStatus.COMPLETED
+            order.customer_done = True
+            order.artist_done = True
             order.status_before_dispute = None
-            commission = calculate_commission(
-                order.price_rub,
-                is_premium_active(order.artist.premium_until),
-                order.commission_pct,
+            customer_msg = tr(
+                "admin_release_customer",
+                customer_lang,
+                order_id=order_id,
+                payout_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
             )
-            payout = max(order.price_rub - commission, 0)
-            customer_msg = tr("admin_release_customer", customer_lang, order_id=order_id, payout=payout)
-            artist_msg = tr("admin_release_artist", artist_lang, order_id=order_id, payout=payout)
+            artist_msg = tr(
+                "admin_release_artist",
+                artist_lang,
+                order_id=order_id,
+                payout_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
+            )
 
     await callback.answer()
     await callback.message.answer(tr("admin_resolve_done", lang, order_id=order_id, decision=decision))
+    if amount_usdt is None:
+        await callback.message.answer(tr("admin_payment_invoice_missing", lang, order_id=order_id))
     await bot.send_message(customer_tg, customer_msg, protect_content=True)
     await bot.send_message(artist_tg, artist_msg, protect_content=True)
     await callback.message.edit_reply_markup(reply_markup=_single_back_keyboard(lang))
@@ -1085,29 +1237,62 @@ async def admin_resolve(message: Message, bot: Bot, settings: Settings) -> None:
         if order is None:
             await message.answer(tr("order_not_found", lang))
             return
+        if order.status != OrderStatus.DISPUTED:
+            await message.answer(tr("admin_dispute_not_open", lang))
+            return
 
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
         artist_lang = await get_user_language(session, artist_tg)
+        amount_usdt, tx_hash = await _resolve_escrow_payment(
+            session=session,
+            settings=settings,
+            order=order,
+            decision=decision,
+        )
 
         if decision == "refund":
             order.status = OrderStatus.CANCELLED
+            order.customer_done = False
+            order.artist_done = False
             order.status_before_dispute = None
-            customer_msg = tr("admin_refund_customer", customer_lang, order_id=order_id)
-            artist_msg = tr("admin_refund_artist", artist_lang, order_id=order_id)
+            customer_msg = tr(
+                "admin_refund_customer",
+                customer_lang,
+                order_id=order_id,
+                amount_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
+            )
+            artist_msg = tr(
+                "admin_refund_artist",
+                artist_lang,
+                order_id=order_id,
+                amount_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
+            )
         else:
             order.status = OrderStatus.COMPLETED
+            order.customer_done = True
+            order.artist_done = True
             order.status_before_dispute = None
-            commission = calculate_commission(
-                order.price_rub,
-                is_premium_active(order.artist.premium_until),
-                order.commission_pct,
+            customer_msg = tr(
+                "admin_release_customer",
+                customer_lang,
+                order_id=order_id,
+                payout_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
             )
-            payout = max(order.price_rub - commission, 0)
-            customer_msg = tr("admin_release_customer", customer_lang, order_id=order_id, payout=payout)
-            artist_msg = tr("admin_release_artist", artist_lang, order_id=order_id, payout=payout)
+            artist_msg = tr(
+                "admin_release_artist",
+                artist_lang,
+                order_id=order_id,
+                payout_usdt=amount_usdt or "-",
+                tx_hash=tx_hash or "-",
+            )
 
     await message.answer(tr("admin_resolve_done", lang, order_id=order_id, decision=decision))
-    await bot.send_message(customer_tg, customer_msg)
-    await bot.send_message(artist_tg, artist_msg)
+    if amount_usdt is None:
+        await message.answer(tr("admin_payment_invoice_missing", lang, order_id=order_id))
+    await bot.send_message(customer_tg, customer_msg, protect_content=True)
+    await bot.send_message(artist_tg, artist_msg, protect_content=True)

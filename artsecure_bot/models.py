@@ -38,6 +38,19 @@ class ReportStatus(str, Enum):
     RESOLVED = "resolved"
 
 
+class PaymentStatus(str, Enum):
+    CREATED = "created"
+    AWAITING_PAYMENT = "awaiting_payment"
+    PAID_PENDING_CONFIRM = "paid_pending_confirm"
+    CONFIRMED = "confirmed"
+    UNDERPAID = "underpaid"
+    OVERPAID = "overpaid"
+    EXPIRED = "expired"
+    RELEASED = "released"
+    REFUNDED = "refunded"
+    CANCELLED = "cancelled"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -47,6 +60,7 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     nickname: Mapped[str] = mapped_column(String(64))
     contact: Mapped[str] = mapped_column(String(255))
+    wallet_address: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -70,6 +84,8 @@ class Order(Base):
     title: Mapped[str] = mapped_column(String(255))
     details: Mapped[str] = mapped_column(Text())
     price_rub: Mapped[int] = mapped_column(Integer)
+    price_amount: Mapped[str] = mapped_column(String(32), default="0")
+    price_currency: Mapped[str] = mapped_column(String(8), default="RUB")
     escrow_amount_rub: Mapped[int] = mapped_column(Integer, default=0)
     commission_pct: Mapped[int] = mapped_column(Integer, default=10)
     customer_done: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -92,6 +108,7 @@ class Order(Base):
 
     assets: Mapped[list[ArtAsset]] = relationship("ArtAsset", back_populates="order")
     reports: Mapped[list[Report]] = relationship("Report", back_populates="order")
+    escrow_invoices: Mapped[list[EscrowInvoice]] = relationship("EscrowInvoice", back_populates="order")
 
 
 class ArtAsset(Base):
@@ -124,6 +141,57 @@ class Report(Base):
     )
 
     order: Mapped[Order | None] = relationship("Order", back_populates="reports")
+
+
+class EscrowInvoice(Base):
+    __tablename__ = "escrow_invoices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    fiat_currency: Mapped[str] = mapped_column(String(8), default="RUB")
+    amount_fiat_minor: Mapped[int] = mapped_column(Integer)
+    expected_amount_usdt: Mapped[str] = mapped_column(String(32))
+    payer_wallet_address: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payment_address: Mapped[str] = mapped_column(String(255))
+    payment_memo: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    status: Mapped[PaymentStatus] = mapped_column(
+        SQLEnum(PaymentStatus),
+        default=PaymentStatus.CREATED,
+        index=True,
+    )
+    tolerance_bps: Mapped[int] = mapped_column(Integer, default=50)
+    provider_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    provider_invoice_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confirmed_amount_usdt: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    order: Mapped[Order] = relationship("Order", back_populates="escrow_invoices")
+    events: Mapped[list[EscrowEvent]] = relationship("EscrowEvent", back_populates="invoice")
+
+
+class EscrowEvent(Base):
+    __tablename__ = "escrow_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("escrow_invoices.id"), index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    invoice: Mapped[EscrowInvoice] = relationship("EscrowInvoice", back_populates="events")
 
 
 class BlacklistEntry(Base):
