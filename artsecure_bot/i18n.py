@@ -33,6 +33,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "role_admin": "Админ",
         "currency_rub": "РУБ",
         "currency_usd": "USD",
+        "currency_usdt": "USDT",
         "order_decision_accept": "Принять",
         "order_decision_reject": "Отклонить",
         "art_kind_preview": "Предпросмотр",
@@ -43,10 +44,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "order_action_dispute": "Открыть спор",
         "order_action_relay": "Открыть чат сделки",
         "order_action_delete": "Удалить заказ",
+        "dispute_reason_not_order": "Не тот заказ",
+        "dispute_reason_other": "Другое",
         "status_pending_artist": "Ожидает ответа исполнителя",
         "status_in_progress": "В работе",
         "status_preview_sent": "Предпросмотр отправлен",
         "status_paid_escrow": "Escrow оплачен",
+        "status_pending_review": "Финальная проверка",
         "status_final_review": "Финальная проверка",
         "status_completed": "Завершен",
         "status_disputed": "Спор",
@@ -222,6 +226,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Tx: {tx_hash}\n"
             "Срок до: {expires_at}"
         ),
+        "invoice_status_checking": "Идет проверка оплаты...",
+        "invoice_paid_notify_customer": (
+            "Оплата по заказу #{order_id} подтверждена.\n"
+            "Tx: {tx_hash}"
+        ),
+        "invoice_paid_notify_artist": (
+            "Escrow по заказу #{order_id} пополнен.\n"
+            "Можно продолжать работу по заказу.\n"
+            "Tx: {tx_hash}"
+        ),
         "mock_only_mode": "Команда доступна только в PAYMENTS_MODE=mock.",
         "mock_paid_done": (
             "MOCK-оплата подтверждена.\n"
@@ -247,13 +261,19 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "К выплате (mock): {payout} RUB, комиссия: {commission} RUB"
         ),
         "dispute_not_participant": "Вы не участник этого заказа.",
+        "dispute_choose_reason": "Выберите причину спора по заказу #{order_id}:",
         "dispute_opened": "Спор по заказу #{order_id} открыт. Администратор рассмотрит его в течение 7 дней.",
+        "dispute_opened_with_reason": (
+            "Спор по заказу #{order_id} открыт. Администратор рассмотрит его в течение 7 дней.\n"
+            "Причина: {reason}"
+        ),
         "dispute_notify_user": "По заказу #{order_id} открыт спор.",
         "dispute_admin_new": (
             "[ADMIN] Новый спор\n"
             "Заказ #{order_id}\n"
             "Заказчик: {customer_tg}\n"
-            "Исполнитель: {artist_tg}"
+            "Исполнитель: {artist_tg}\n"
+            "Причина: {reason}"
         ),
         "force_close_already": "Заказ уже закрыт.",
         "force_close_done": "Заказ #{order_id} закрыт принудительно.",
@@ -289,6 +309,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_done_wait_other": "Ожидаем подтверждение второй стороны.",
         "relay_done_progress": "Подтверждения: заказчик={customer_done}, исполнитель={artist_done}.",
         "relay_done_other_confirmed": "Вторая сторона нажала «{done_label}».",
+        "relay_review_started": (
+            "Обе стороны нажали «{done_label}». Начат этап финальной проверки.\n"
+            "Дедлайн: {deadline}\n"
+            "До дедлайна можно открыть спор. Если спор не открыт — средства автоматически уйдут исполнителю."
+        ),
+        "relay_review_wait": (
+            "Идет финальная проверка до {deadline}.\n"
+            "Если есть проблема — откройте спор до окончания таймера."
+        ),
         "relay_done_complete": (
             "Обе стороны подтвердили завершение. Заказ #{order_id} завершен.\n"
             "Отправляю архив с оригиналами без масок."
@@ -355,6 +384,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "2) Отправьте этот файл как медиа «один просмотр».\n"
             "3) Дополнительно подтвердите отправку в relay-чате."
         ),
+        "send_art_uploaded_notify_customer": (
+            "Заказ #{order_id}: исполнитель загрузил работу в бота.\n"
+            "Всего загружено работ: {count}."
+        ),
         "report_ask_target": "Введите TG ID пользователя, на которого хотите пожаловаться:",
         "report_target_id_number": "TG ID должен быть числом.",
         "report_ask_order_id": "Укажите ID заказа (или 0, если жалоба не связана с заказом):",
@@ -402,6 +435,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Исполнитель: {artist_ref}\n"
             "Название: {title}\n"
             "Цена: {price} RUB\n"
+            "Причина: {dispute_reason}\n"
             "Файлов исполнителя в ZIP: {assets}"
         ),
         "admin_dispute_not_open": "Этот спор уже закрыт.",
@@ -508,6 +542,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "role_admin": "Admin",
         "currency_rub": "RUB",
         "currency_usd": "USD",
+        "currency_usdt": "USDT",
         "order_decision_accept": "Accept",
         "order_decision_reject": "Reject",
         "art_kind_preview": "Preview",
@@ -518,10 +553,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "order_action_dispute": "Open Dispute",
         "order_action_relay": "Open Deal Chat",
         "order_action_delete": "Delete Order",
+        "dispute_reason_not_order": "Wrong order",
+        "dispute_reason_other": "Other",
         "status_pending_artist": "Waiting for artist response",
         "status_in_progress": "In progress",
         "status_preview_sent": "Preview sent",
         "status_paid_escrow": "Escrow paid",
+        "status_pending_review": "Final timed review",
         "status_final_review": "Final review",
         "status_completed": "Completed",
         "status_disputed": "Disputed",
@@ -692,6 +730,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Tx: {tx_hash}\n"
             "Expires at: {expires_at}"
         ),
+        "invoice_status_checking": "Checking payment status...",
+        "invoice_paid_notify_customer": (
+            "Payment for order #{order_id} is confirmed.\n"
+            "Tx: {tx_hash}"
+        ),
+        "invoice_paid_notify_artist": (
+            "Escrow for order #{order_id} is funded.\n"
+            "You can continue the deal now.\n"
+            "Tx: {tx_hash}"
+        ),
         "mock_only_mode": "This command is available only in PAYMENTS_MODE=mock.",
         "mock_paid_done": (
             "MOCK payment confirmed.\n"
@@ -717,13 +765,19 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Mock payout: {payout} RUB, fee: {commission} RUB"
         ),
         "dispute_not_participant": "You are not a participant of this order.",
+        "dispute_choose_reason": "Choose dispute reason for order #{order_id}:",
         "dispute_opened": "Dispute for order #{order_id} opened. Admin will review within 7 days.",
+        "dispute_opened_with_reason": (
+            "Dispute for order #{order_id} opened. Admin will review within 7 days.\n"
+            "Reason: {reason}"
+        ),
         "dispute_notify_user": "Dispute opened for order #{order_id}.",
         "dispute_admin_new": (
             "[ADMIN] New dispute\n"
             "Order #{order_id}\n"
             "Customer: {customer_tg}\n"
-            "Artist: {artist_tg}"
+            "Artist: {artist_tg}\n"
+            "Reason: {reason}"
         ),
         "force_close_already": "Order is already closed.",
         "force_close_done": "Order #{order_id} force-closed.",
@@ -759,6 +813,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_done_wait_other": "Waiting for the other side confirmation.",
         "relay_done_progress": "Confirmations: customer={customer_done}, artist={artist_done}.",
         "relay_done_other_confirmed": "The other side pressed \"{done_label}\".",
+        "relay_review_started": (
+            "Both sides pressed \"{done_label}\". Final timed review has started.\n"
+            "Deadline: {deadline}\n"
+            "You can open dispute before deadline. If dispute is not opened, funds are auto-released to artist."
+        ),
+        "relay_review_wait": (
+            "Final review is active until {deadline}.\n"
+            "If something is wrong, open dispute before timer ends."
+        ),
         "relay_done_complete": (
             "Both sides confirmed completion. Order #{order_id} is completed.\n"
             "Sending archive with original files without watermarks."
@@ -825,6 +888,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "2) Send this file as \"one-time view\" media.\n"
             "3) Confirm delivery in relay chat."
         ),
+        "send_art_uploaded_notify_customer": (
+            "Order #{order_id}: artist uploaded work to bot.\n"
+            "Total uploaded files: {count}."
+        ),
         "report_ask_target": "Enter TG ID of user you want to report:",
         "report_target_id_number": "TG ID must be numeric.",
         "report_ask_order_id": "Provide order ID (or 0 if report is not tied to order):",
@@ -872,6 +939,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Artist: {artist_ref}\n"
             "Title: {title}\n"
             "Price: {price} RUB\n"
+            "Reason: {dispute_reason}\n"
             "Artist files in ZIP: {assets}"
         ),
         "admin_dispute_not_open": "This dispute is already closed.",

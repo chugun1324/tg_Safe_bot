@@ -110,6 +110,7 @@ class PaymentEscrowService:
         order.status = OrderStatus.PAID_ESCROW
         order.customer_done = False
         order.artist_done = False
+        order.review_deadline_at = None
         order.escrow_amount_rub = order.price_rub
 
         await self._log_event(

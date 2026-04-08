@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -11,6 +12,7 @@ from artsecure_bot.config import Settings, load_settings
 from artsecure_bot.db import init_db
 from artsecure_bot.handlers import admin, art, chat, common, nda, orders, payments, report, search
 from artsecure_bot.middlewares.rate_limit import RateLimitMiddleware
+from artsecure_bot.payments.review_watchdog import run_review_watchdog
 
 
 async def run_bot(settings: Settings) -> None:
@@ -45,7 +47,13 @@ async def run_bot(settings: Settings) -> None:
         admin.router,
     )
 
-    await dp.start_polling(bot)
+    review_watchdog_task = asyncio.create_task(run_review_watchdog(bot, settings))
+    try:
+        await dp.start_polling(bot)
+    finally:
+        review_watchdog_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await review_watchdog_task
 
 
 def run() -> None:

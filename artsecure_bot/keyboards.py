@@ -107,7 +107,6 @@ def order_decision_keyboard(order_id: int, language: str = DEFAULT_LANGUAGE) -> 
 def art_kind_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=tr("art_kind_preview", language), callback_data="art_kind:preview")],
             [InlineKeyboardButton(text=tr("art_kind_direct", language), callback_data="art_kind:direct")],
         ]
     )
@@ -125,6 +124,7 @@ def order_actions_keyboard(
         OrderStatus.IN_PROGRESS,
         OrderStatus.PREVIEW_SENT,
         OrderStatus.PAID_ESCROW,
+        OrderStatus.PENDING_REVIEW,
         OrderStatus.FINAL_REVIEW,
         OrderStatus.DISPUTED,
     }
@@ -204,5 +204,23 @@ def order_currency_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardM
         inline_keyboard=[
             [InlineKeyboardButton(text=tr("currency_rub", language), callback_data="order_currency:RUB")],
             [InlineKeyboardButton(text=tr("currency_usd", language), callback_data="order_currency:USD")],
+            [InlineKeyboardButton(text=tr("currency_usdt", language), callback_data="order_currency:USDT")],
+        ]
+    )
+
+
+def dispute_reason_keyboard(order_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=tr("dispute_reason_not_order", language),
+                    callback_data=f"dispute_reason:not_order:{order_id}",
+                ),
+                InlineKeyboardButton(
+                    text=tr("dispute_reason_other", language),
+                    callback_data=f"dispute_reason:other:{order_id}",
+                ),
+            ]
         ]
     )

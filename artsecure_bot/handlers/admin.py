@@ -66,6 +66,14 @@ def _is_admin_callback(callback: CallbackQuery, settings: Settings) -> bool:
     return callback.from_user is not None and callback.from_user.id in settings.admin_ids
 
 
+def _dispute_reason_label(reason_code: str | None, language: str) -> str:
+    if reason_code == "not_order":
+        return tr("dispute_reason_not_order", language)
+    if reason_code == "other":
+        return tr("dispute_reason_other", language)
+    return tr("unknown", language)
+
+
 def _admin_home_keyboard(language: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -380,7 +388,9 @@ def _build_rate_provider(settings: Settings) -> ManualRateProvider:
         rates_by_currency={
             "RUB": settings.manual_usdt_rate_rub,
             "USD": settings.manual_usdt_rate_usd,
-        }
+            "USDT": 1.0,
+        },
+        rate_source=settings.payment_rate_source,
     )
 
 
@@ -727,6 +737,7 @@ async def admin_dispute_open(callback: CallbackQuery, bot: Bot, settings: Settin
             artist_ref=_user_mention(order.artist, lang),
             title=html.escape(order.title),
             price=format_price_value(order_price_amount(order)),
+            dispute_reason=html.escape(_dispute_reason_label(order.dispute_reason, lang)),
             assets=added_files,
         )
 
@@ -764,7 +775,10 @@ async def admin_dispute_close(callback: CallbackQuery, bot: Bot, settings: Setti
             return
         restore_status = order.status_before_dispute or OrderStatus.IN_PROGRESS
         order.status = restore_status
+        if restore_status != OrderStatus.PENDING_REVIEW:
+            order.review_deadline_at = None
         order.status_before_dispute = None
+        order.dispute_reason = None
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
@@ -823,7 +837,9 @@ async def admin_resolve_callback(callback: CallbackQuery, bot: Bot, settings: Se
             order.status = OrderStatus.CANCELLED
             order.customer_done = False
             order.artist_done = False
+            order.review_deadline_at = None
             order.status_before_dispute = None
+            order.dispute_reason = None
             customer_msg = tr(
                 "admin_refund_customer",
                 customer_lang,
@@ -842,7 +858,9 @@ async def admin_resolve_callback(callback: CallbackQuery, bot: Bot, settings: Se
             order.status = OrderStatus.COMPLETED
             order.customer_done = True
             order.artist_done = True
+            order.review_deadline_at = None
             order.status_before_dispute = None
+            order.dispute_reason = None
             customer_msg = tr(
                 "admin_release_customer",
                 customer_lang,
@@ -1256,7 +1274,9 @@ async def admin_resolve(message: Message, bot: Bot, settings: Settings) -> None:
             order.status = OrderStatus.CANCELLED
             order.customer_done = False
             order.artist_done = False
+            order.review_deadline_at = None
             order.status_before_dispute = None
+            order.dispute_reason = None
             customer_msg = tr(
                 "admin_refund_customer",
                 customer_lang,
@@ -1275,7 +1295,9 @@ async def admin_resolve(message: Message, bot: Bot, settings: Settings) -> None:
             order.status = OrderStatus.COMPLETED
             order.customer_done = True
             order.artist_done = True
+            order.review_deadline_at = None
             order.status_before_dispute = None
+            order.dispute_reason = None
             customer_msg = tr(
                 "admin_release_customer",
                 customer_lang,

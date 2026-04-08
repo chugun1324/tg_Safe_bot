@@ -22,6 +22,7 @@ class OrderStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     PREVIEW_SENT = "preview_sent"
     PAID_ESCROW = "paid_escrow"
+    PENDING_REVIEW = "pending_review"
     FINAL_REVIEW = "final_review"
     COMPLETED = "completed"
     DISPUTED = "disputed"
@@ -90,8 +91,10 @@ class Order(Base):
     commission_pct: Mapped[int] = mapped_column(Integer, default=10)
     customer_done: Mapped[bool] = mapped_column(Boolean, default=False)
     artist_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), index=True)
     status_before_dispute: Mapped[OrderStatus | None] = mapped_column(SQLEnum(OrderStatus), nullable=True)
+    dispute_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

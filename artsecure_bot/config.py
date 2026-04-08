@@ -20,6 +20,8 @@ class Settings:
     fiat_base_currency: str
     payment_rate_source: str
     payment_invoice_ttl_minutes: int
+    escrow_review_minutes: int
+    escrow_review_poll_seconds: int
     payment_tolerance_bps: int
     payment_provider_name: str
     payment_api_key: str
@@ -61,6 +63,8 @@ def load_settings() -> Settings:
     fiat_base_currency = os.getenv("FIAT_BASE_CURRENCY", "RUB").strip().upper()
     payment_rate_source = os.getenv("PAYMENT_RATE_SOURCE", "manual").strip().lower()
     payment_invoice_ttl_minutes = int(os.getenv("PAYMENT_INVOICE_TTL_MINUTES", "15"))
+    escrow_review_minutes = int(os.getenv("ESCROW_REVIEW_MINUTES", "15"))
+    escrow_review_poll_seconds = int(os.getenv("ESCROW_REVIEW_POLL_SECONDS", "10"))
     payment_tolerance_bps = int(os.getenv("PAYMENT_TOLERANCE_BPS", "50"))
     payment_provider_name = os.getenv("PAYMENT_PROVIDER_NAME", "wallet").strip()
     payment_api_key = os.getenv("PAYMENT_API_KEY", "").strip()
@@ -110,6 +114,8 @@ def load_settings() -> Settings:
         fiat_base_currency=fiat_base_currency,
         payment_rate_source=payment_rate_source,
         payment_invoice_ttl_minutes=payment_invoice_ttl_minutes,
+        escrow_review_minutes=max(escrow_review_minutes, 1),
+        escrow_review_poll_seconds=max(escrow_review_poll_seconds, 5),
         payment_tolerance_bps=payment_tolerance_bps,
         payment_provider_name=payment_provider_name,
         payment_api_key=payment_api_key,

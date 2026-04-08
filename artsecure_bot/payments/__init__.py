@@ -1,3 +1,4 @@
+from artsecure_bot.payments.autocheck import schedule_invoice_watch
 from artsecure_bot.payments.gateway import IncomingTransfer, MockWalletGateway, TonWalletGateway
 from artsecure_bot.payments.payout import (
     PayoutConfigError,
@@ -16,6 +17,7 @@ __all__ = [
     "PayoutTransferError",
     "PaymentEscrowService",
     "RateQuote",
+    "schedule_invoice_watch",
     "TonWalletGateway",
     "send_usdt_from_escrow",
     "send_usdt_from_escrow_batch",

@@ -33,8 +33,12 @@ async def init_db(database_url: str) -> None:
                 await conn.execute(text("ALTER TABLE orders ADD COLUMN customer_done BOOLEAN DEFAULT 0"))
             if "artist_done" not in columns:
                 await conn.execute(text("ALTER TABLE orders ADD COLUMN artist_done BOOLEAN DEFAULT 0"))
+            if "review_deadline_at" not in columns:
+                await conn.execute(text("ALTER TABLE orders ADD COLUMN review_deadline_at DATETIME"))
             if "status_before_dispute" not in columns:
                 await conn.execute(text("ALTER TABLE orders ADD COLUMN status_before_dispute VARCHAR(32)"))
+            if "dispute_reason" not in columns:
+                await conn.execute(text("ALTER TABLE orders ADD COLUMN dispute_reason VARCHAR(64)"))
             if "price_currency" not in columns:
                 await conn.execute(text("ALTER TABLE orders ADD COLUMN price_currency VARCHAR(8) DEFAULT 'RUB'"))
             if "price_amount" not in columns:

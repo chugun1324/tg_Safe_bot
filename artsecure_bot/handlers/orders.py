@@ -15,6 +15,7 @@ from artsecure_bot.db import session_scope
 from artsecure_bot.handlers.utils import build_main_menu_for_user, require_registered_user, require_role
 from artsecure_bot.i18n import tr, variants
 from artsecure_bot.keyboards import (
+    dispute_reason_keyboard,
     flow_menu,
     order_actions_keyboard,
     order_currency_keyboard,
@@ -22,7 +23,7 @@ from artsecure_bot.keyboards import (
     relay_menu,
 )
 from artsecure_bot.models import OrderStatus, PaymentStatus, UserRole
-from artsecure_bot.payments import ManualRateProvider, PaymentEscrowService
+from artsecure_bot.payments import ManualRateProvider, PaymentEscrowService, schedule_invoice_watch
 from artsecure_bot.services.chat_cleanup import clear_chat_keep_message
 from artsecure_bot.services.order_logic import status_label
 from artsecure_bot.services.price import format_price_value, order_price_amount, parse_price_input, to_fiat_minor_units
@@ -41,6 +42,7 @@ from artsecure_bot.states import CreateOrderState, RelayState
 
 router = Router()
 USERNAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{4,31}$")
+DISPUTE_REASON_CODES = {"not_order", "other"}
 
 
 def _normalize_username(raw: str) -> str | None:
@@ -82,6 +84,7 @@ def _relay_available(status: OrderStatus) -> bool:
         OrderStatus.IN_PROGRESS,
         OrderStatus.PREVIEW_SENT,
         OrderStatus.PAID_ESCROW,
+        OrderStatus.PENDING_REVIEW,
         OrderStatus.FINAL_REVIEW,
         OrderStatus.DISPUTED,
     }
@@ -96,12 +99,32 @@ def _parse_callback_order_id(data: str | None, prefix: str) -> int | None:
     return int(parts[1])
 
 
+def _parse_dispute_reason_callback(data: str | None) -> tuple[str, int] | None:
+    if data is None:
+        return None
+    parts = data.split(":")
+    if len(parts) != 3 or parts[0] != "dispute_reason" or not parts[2].isdigit():
+        return None
+    reason_code = parts[1]
+    if reason_code not in DISPUTE_REASON_CODES:
+        return None
+    return reason_code, int(parts[2])
+
+
+def _dispute_reason_label(reason_code: str | None, language: str) -> str:
+    if reason_code == "not_order":
+        return tr("dispute_reason_not_order", language)
+    return tr("dispute_reason_other", language)
+
+
 def _build_rate_provider(settings: Settings) -> ManualRateProvider:
     return ManualRateProvider(
         rates_by_currency={
             "RUB": settings.manual_usdt_rate_rub,
             "USD": settings.manual_usdt_rate_usd,
-        }
+            "USDT": 1.0,
+        },
+        rate_source=settings.payment_rate_source,
     )
 
 
@@ -230,14 +253,14 @@ async def create_order_currency(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer()
         return
     currency = parts[1].upper()
-    if currency not in {"RUB", "USD"}:
+    if currency not in {"RUB", "USD", "USDT"}:
         await callback.answer(tr("currency_invalid", lang), show_alert=True)
         return
 
     await state.update_data(price_currency=currency)
     await state.set_state(CreateOrderState.waiting_title)
     await callback.message.answer(
-        tr("create_currency_selected", lang, currency=tr(f"currency_{currency.lower()}", lang)),
+        tr("create_ask_title", lang),
         reply_markup=flow_menu(lang),
     )
     await callback.answer()
@@ -283,7 +306,7 @@ async def create_order_price(message: Message, bot: Bot, state: FSMContext) -> N
         artist_username = data.get("artist_username")
         title = data.get("title")
         price_currency = str(data.get("price_currency", "RUB")).upper()
-        if price_currency not in {"RUB", "USD"}:
+        if price_currency not in {"RUB", "USD", "USDT"}:
             price_currency = "RUB"
         if not isinstance(artist_tg_id, int) or not title:
             await message.answer(tr("create_expired", lang))
@@ -430,7 +453,6 @@ async def order_decision(
                 order_id=order_id,
                 leave_label=tr("btn_leave_relay", customer_lang),
             ),
-            protect_content=True,
             reply_markup=relay_menu(customer_lang, can_send_art=False, can_mark_done=False),
         )
 
@@ -563,6 +585,7 @@ async def pay_order(message: Message, settings: Settings) -> None:
         ),
         reply_markup=_invoice_keyboard(view.invoice_id, wallet_url, external_wallet_url, lang),
     )
+    schedule_invoice_watch(message.bot, settings, view.invoice_id)
 
 
 @router.message(Command("release"))
@@ -605,15 +628,18 @@ async def dispute_order(message: Message, bot: Bot, settings: Settings) -> None:
             await message.answer(tr("dispute_not_participant", lang))
             return
 
+        reason_code = "other"
+        reason_label = _dispute_reason_label(reason_code, lang)
         if order.status != OrderStatus.DISPUTED:
             order.status_before_dispute = order.status
         order.status = OrderStatus.DISPUTED
+        order.dispute_reason = reason_code
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
         artist_lang = await get_user_language(session, artist_tg)
 
-    await message.answer(tr("dispute_opened", lang, order_id=order_id))
+    await message.answer(tr("dispute_opened_with_reason", lang, order_id=order_id, reason=reason_label))
 
     if message.from_user.id != customer_tg:
         await bot.send_message(
@@ -629,7 +655,14 @@ async def dispute_order(message: Message, bot: Bot, settings: Settings) -> None:
             continue
         await bot.send_message(
             admin_id,
-            tr("dispute_admin_new", lang, order_id=order_id, customer_tg=customer_tg, artist_tg=artist_tg),
+            tr(
+                "dispute_admin_new",
+                lang,
+                order_id=order_id,
+                customer_tg=customer_tg,
+                artist_tg=artist_tg,
+                reason=reason_label,
+            ),
         )
 
 
@@ -663,7 +696,9 @@ async def force_close_order(message: Message, bot: Bot) -> None:
             return
 
         order.status = OrderStatus.CANCELLED
+        order.review_deadline_at = None
         order.status_before_dispute = None
+        order.dispute_reason = None
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
@@ -772,6 +807,7 @@ async def pay_callback(callback: CallbackQuery, settings: Settings) -> None:
             ),
             reply_markup=_invoice_keyboard(view.invoice_id, wallet_url, external_wallet_url, lang),
         )
+        schedule_invoice_watch(callback.bot, settings, view.invoice_id)
 
 
 @router.callback_query(F.data.startswith("release:"))
@@ -848,9 +884,21 @@ async def dispute_callback(callback: CallbackQuery, bot: Bot, settings: Settings
             await callback.answer(tr("relay_order_closed", lang), show_alert=True)
             return
 
+        if order.status in {OrderStatus.PENDING_REVIEW, OrderStatus.FINAL_REVIEW}:
+            await callback.answer()
+            if callback.message is not None:
+                await callback.message.answer(
+                    tr("dispute_choose_reason", lang, order_id=order_id),
+                    reply_markup=dispute_reason_keyboard(order_id, lang),
+                )
+            return
+
+        reason_code = "other"
+        reason_label = _dispute_reason_label(reason_code, lang)
         if order.status != OrderStatus.DISPUTED:
             order.status_before_dispute = order.status
         order.status = OrderStatus.DISPUTED
+        order.dispute_reason = reason_code
         customer_tg = order.customer.tg_id
         artist_tg = order.artist.tg_id
         customer_lang = await get_user_language(session, customer_tg)
@@ -859,8 +907,12 @@ async def dispute_callback(callback: CallbackQuery, bot: Bot, settings: Settings
 
     await callback.answer()
     if callback.message is not None:
-        await callback.message.edit_reply_markup(reply_markup=updated_markup)
-        await callback.message.answer(tr("dispute_opened", lang, order_id=order_id))
+        try:
+            await callback.message.edit_reply_markup(reply_markup=updated_markup)
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc):
+                raise
+        await callback.message.answer(tr("dispute_opened_with_reason", lang, order_id=order_id, reason=reason_label))
 
     if callback.from_user.id != customer_tg:
         await bot.send_message(
@@ -876,7 +928,93 @@ async def dispute_callback(callback: CallbackQuery, bot: Bot, settings: Settings
             continue
         await bot.send_message(
             admin_id,
-            tr("dispute_admin_new", lang, order_id=order_id, customer_tg=customer_tg, artist_tg=artist_tg),
+            tr(
+                "dispute_admin_new",
+                lang,
+                order_id=order_id,
+                customer_tg=customer_tg,
+                artist_tg=artist_tg,
+                reason=reason_label,
+            ),
+        )
+
+
+@router.callback_query(F.data.startswith("dispute_reason:"))
+async def dispute_reason_callback(callback: CallbackQuery, bot: Bot, settings: Settings) -> None:
+    if callback.from_user is None or callback.data is None:
+        return
+    parsed = _parse_dispute_reason_callback(callback.data)
+    if parsed is None:
+        await callback.answer()
+        return
+    reason_code, order_id = parsed
+
+    async with session_scope() as session:
+        lang = await get_user_language(session, callback.from_user.id)
+        user = await get_user_by_tg_id(session, callback.from_user.id)
+        if user is None:
+            await callback.answer(tr("err_not_registered", lang), show_alert=True)
+            return
+        if user.is_banned:
+            await callback.answer(tr("err_banned", lang), show_alert=True)
+            return
+
+        order = await get_order_by_id(session, order_id)
+        if order is None:
+            await callback.answer(tr("order_not_found", lang), show_alert=True)
+            return
+
+        allowed = user.id in {order.customer_id, order.artist_id} or user.tg_id in settings.admin_ids
+        if not allowed:
+            await callback.answer(tr("dispute_not_participant", lang), show_alert=True)
+            return
+
+        if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED}:
+            await callback.answer(tr("relay_order_closed", lang), show_alert=True)
+            return
+
+        reason_label = _dispute_reason_label(reason_code, lang)
+        if order.status != OrderStatus.DISPUTED:
+            order.status_before_dispute = order.status
+        order.status = OrderStatus.DISPUTED
+        order.dispute_reason = reason_code
+        customer_tg = order.customer.tg_id
+        artist_tg = order.artist.tg_id
+        customer_lang = await get_user_language(session, customer_tg)
+        artist_lang = await get_user_language(session, artist_tg)
+        updated_markup = order_actions_keyboard(order.id, order.status, user.role, lang)
+
+    await callback.answer()
+    if callback.message is not None:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=updated_markup)
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc):
+                raise
+        await callback.message.answer(tr("dispute_opened_with_reason", lang, order_id=order_id, reason=reason_label))
+
+    if callback.from_user.id != customer_tg:
+        await bot.send_message(
+            customer_tg, tr("dispute_notify_user", customer_lang, order_id=order_id), protect_content=True
+        )
+    if callback.from_user.id != artist_tg:
+        await bot.send_message(
+            artist_tg, tr("dispute_notify_user", artist_lang, order_id=order_id), protect_content=True
+        )
+
+    for admin_id in settings.admin_ids:
+        if admin_id == callback.from_user.id:
+            continue
+        await bot.send_message(
+            admin_id,
+            tr(
+                "dispute_admin_new",
+                lang,
+                order_id=order_id,
+                customer_tg=customer_tg,
+                artist_tg=artist_tg,
+                reason=reason_label,
+            ),
         )
 
 

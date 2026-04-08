@@ -22,6 +22,7 @@ from artsecure_bot.payments import (
     MockWalletGateway,
     PaymentEscrowService,
     TonWalletGateway,
+    schedule_invoice_watch,
 )
 from artsecure_bot.services.price import order_price_amount, to_fiat_minor_units
 from artsecure_bot.services.repository import (
@@ -41,7 +42,9 @@ def _build_rate_provider(settings: Settings) -> ManualRateProvider:
         rates_by_currency={
             "RUB": settings.manual_usdt_rate_rub,
             "USD": settings.manual_usdt_rate_usd,
-        }
+            "USDT": 1.0,
+        },
+        rate_source=settings.payment_rate_source,
     )
 
 
@@ -368,6 +371,7 @@ async def create_invoice(message: Message, settings: Settings) -> None:
                     ),
                     reply_markup=_invoice_keyboard(view.invoice_id, wallet_url, external_wallet_url, lang),
                 )
+                schedule_invoice_watch(message.bot, settings, view.invoice_id)
                 return
 
         invoice = await service.create_invoice(
@@ -406,6 +410,7 @@ async def create_invoice(message: Message, settings: Settings) -> None:
         ),
         reply_markup=_invoice_keyboard(view.invoice_id, wallet_url, external_wallet_url, lang),
     )
+    schedule_invoice_watch(message.bot, settings, view.invoice_id)
 
 
 @router.message(Command("invoice_status"))
@@ -435,6 +440,8 @@ async def invoice_status(message: Message, settings: Settings) -> None:
             await message.answer(tr("dispute_not_participant", lang))
             return
 
+        checking_notice = await message.answer(tr("invoice_status_checking", lang))
+
         service = _build_payment_service(settings)
         await service.mark_expired_if_needed(session, invoice)
         tx_hash = await _try_confirm_invoice_from_chain(
@@ -443,11 +450,7 @@ async def invoice_status(message: Message, settings: Settings) -> None:
             invoice=invoice,
             order=order,
         )
-        artist_tg = order.artist.tg_id
-        artist_lang = await get_user_language(session, artist_tg)
-
-    await message.answer(
-        tr(
+        text = tr(
             "invoice_status_card",
             lang,
             invoice_id=invoice.id,
@@ -458,12 +461,25 @@ async def invoice_status(message: Message, settings: Settings) -> None:
             tx_hash=invoice.tx_hash or "-",
             expires_at=invoice.expires_at.strftime("%Y-%m-%d %H:%M:%S"),
         )
-    )
-    if tx_hash is not None and message.from_user.id != artist_tg:
+        artist_tg = order.artist.tg_id
+        customer_tg = order.customer.tg_id
+        artist_lang = await get_user_language(session, artist_tg)
+        customer_lang = await get_user_language(session, customer_tg)
+
+    try:
+        await checking_notice.delete()
+    except Exception:
+        pass
+    await message.answer(text)
+    if tx_hash is not None:
+        if message.from_user.id != customer_tg:
+            await message.bot.send_message(
+                customer_tg,
+                tr("invoice_paid_notify_customer", customer_lang, order_id=order.id, tx_hash=tx_hash),
+            )
         await message.bot.send_message(
             artist_tg,
-            tr("mock_paid_notify_artist", artist_lang, order_id=order.id),
-            protect_content=True,
+            tr("invoice_paid_notify_artist", artist_lang, order_id=order.id, tx_hash=tx_hash),
         )
 
 
@@ -498,6 +514,9 @@ async def invoice_status_callback(callback: CallbackQuery, settings: Settings) -
             await callback.answer(tr("dispute_not_participant", lang), show_alert=True)
             return
         await callback.answer()
+        checking_notice = None
+        if callback.message is not None:
+            checking_notice = await callback.message.answer(tr("invoice_status_checking", lang))
 
         service = _build_payment_service(settings)
         await service.mark_expired_if_needed(session, invoice)
@@ -519,14 +538,25 @@ async def invoice_status_callback(callback: CallbackQuery, settings: Settings) -
             expires_at=invoice.expires_at.strftime("%Y-%m-%d %H:%M:%S"),
         )
         artist_tg = order.artist.tg_id
+        customer_tg = order.customer.tg_id
         artist_lang = await get_user_language(session, artist_tg)
+        customer_lang = await get_user_language(session, customer_tg)
     if callback.message is not None:
+        try:
+            if checking_notice is not None:
+                await checking_notice.delete()
+        except Exception:
+            pass
         await callback.message.answer(text)
-    if tx_hash is not None and callback.from_user.id != artist_tg:
+    if tx_hash is not None:
+        if callback.from_user.id != customer_tg:
+            await callback.bot.send_message(
+                customer_tg,
+                tr("invoice_paid_notify_customer", customer_lang, order_id=order.id, tx_hash=tx_hash),
+            )
         await callback.bot.send_message(
             artist_tg,
-            tr("mock_paid_notify_artist", artist_lang, order_id=order.id),
-            protect_content=True,
+            tr("invoice_paid_notify_artist", artist_lang, order_id=order.id, tx_hash=tx_hash),
         )
     try:
         await callback.answer()
