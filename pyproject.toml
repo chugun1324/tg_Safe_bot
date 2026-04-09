@@ -10,6 +10,11 @@ dependencies = [
   "Pillow>=10,<12",
   "reportlab>=4,<5",
   "python-dotenv>=1.0,<2",
+  "aiohttp>=3.9,<4",
+  "tonutils>=2.0.1b2",
+  "pytoniq-core>=0.1,<1",
+  "tontools>=1.0.4",
+  "aiogram-tonconnect>=0.14.4",
 ]
 
 [project.optional-dependencies]

@@ -7,8 +7,11 @@ from sqlalchemy.orm import selectinload
 from artsecure_bot.models import (
     BlacklistEntry,
     ArtAsset,
+    EscrowEvent,
+    EscrowInvoice,
     Order,
     OrderStatus,
+    PaymentStatus,
     Report,
     User,
     UserLocale,
@@ -18,6 +21,11 @@ from artsecure_bot.models import (
 
 async def get_user_by_tg_id(session: AsyncSession, tg_id: int) -> User | None:
     query = select(User).where(User.tg_id == tg_id)
+    return await session.scalar(query)
+
+
+async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
+    query = select(User).where(User.id == user_id)
     return await session.scalar(query)
 
 
@@ -98,6 +106,8 @@ async def create_order(
     title: str,
     details: str,
     price_rub: int,
+    price_amount: str | None = None,
+    price_currency: str = "RUB",
 ) -> Order:
     order = Order(
         customer_id=customer_id,
@@ -105,6 +115,8 @@ async def create_order(
         title=title,
         details=details,
         price_rub=price_rub,
+        price_amount=price_amount or str(price_rub),
+        price_currency=price_currency,
         status=OrderStatus.PENDING_ARTIST,
     )
     session.add(order)
@@ -131,6 +143,18 @@ async def list_orders_for_user(session: AsyncSession, user: User) -> list[Order]
         query = query
 
     rows = await session.scalars(query.order_by(Order.created_at.desc()).limit(30))
+    return list(rows)
+
+
+async def list_disputed_orders(session: AsyncSession, limit: int = 50) -> list[Order]:
+    query = (
+        select(Order)
+        .where(Order.status == OrderStatus.DISPUTED)
+        .options(selectinload(Order.customer), selectinload(Order.artist), selectinload(Order.assets))
+        .order_by(Order.created_at.desc())
+        .limit(limit)
+    )
+    rows = await session.scalars(query)
     return list(rows)
 
 
@@ -180,7 +204,72 @@ async def create_report(
     return report
 
 
+async def list_reports(session: AsyncSession, limit: int = 100) -> list[Report]:
+    query = select(Report).options(selectinload(Report.order)).order_by(Report.created_at.desc()).limit(limit)
+    rows = await session.scalars(query)
+    return list(rows)
+
+
+async def list_users(session: AsyncSession, limit: int = 200) -> list[User]:
+    query = select(User).order_by(User.created_at.desc()).limit(limit)
+    rows = await session.scalars(query)
+    return list(rows)
+
+
+async def get_latest_open_invoice_for_order(session: AsyncSession, order_id: int) -> EscrowInvoice | None:
+    query = (
+        select(EscrowInvoice)
+        .where(EscrowInvoice.order_id == order_id)
+        .where(EscrowInvoice.status.in_([PaymentStatus.CREATED, PaymentStatus.AWAITING_PAYMENT]))
+        .order_by(EscrowInvoice.created_at.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
+
+
+async def get_latest_invoice_for_order(session: AsyncSession, order_id: int) -> EscrowInvoice | None:
+    query = (
+        select(EscrowInvoice)
+        .where(EscrowInvoice.order_id == order_id)
+        .order_by(EscrowInvoice.created_at.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
+
+
+async def get_latest_confirmed_invoice_for_order(session: AsyncSession, order_id: int) -> EscrowInvoice | None:
+    query = (
+        select(EscrowInvoice)
+        .where(EscrowInvoice.order_id == order_id)
+        .where(EscrowInvoice.status == PaymentStatus.CONFIRMED)
+        .order_by(EscrowInvoice.created_at.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
+
+
+async def get_invoice_by_id(session: AsyncSession, invoice_id: int) -> EscrowInvoice | None:
+    query = select(EscrowInvoice).where(EscrowInvoice.id == invoice_id)
+    return await session.scalar(query)
+
+
+async def list_invoice_events(session: AsyncSession, invoice_id: int, limit: int = 30) -> list[EscrowEvent]:
+    query = (
+        select(EscrowEvent)
+        .where(EscrowEvent.invoice_id == invoice_id)
+        .order_by(EscrowEvent.created_at.desc())
+        .limit(limit)
+    )
+    rows = await session.scalars(query)
+    return list(rows)
+
+
 async def delete_order_with_related(session: AsyncSession, order_id: int) -> None:
+    invoice_ids = await session.scalars(select(EscrowInvoice.id).where(EscrowInvoice.order_id == order_id))
+    invoice_id_list = list(invoice_ids)
+    if invoice_id_list:
+        await session.execute(delete(EscrowEvent).where(EscrowEvent.invoice_id.in_(invoice_id_list)))
+    await session.execute(delete(EscrowInvoice).where(EscrowInvoice.order_id == order_id))
     await session.execute(delete(ArtAsset).where(ArtAsset.order_id == order_id))
     await session.execute(delete(Report).where(Report.order_id == order_id))
     await session.execute(delete(Order).where(Order.id == order_id))

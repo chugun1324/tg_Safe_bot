@@ -1,4 +1,4 @@
-from artsecure_bot.handlers import admin, art, chat, common, nda, orders, report, search
+from artsecure_bot.handlers import admin, art, chat, common, nda, orders, payments, report, search
 
 __all__ = [
     "admin",
@@ -7,6 +7,7 @@ __all__ = [
     "common",
     "nda",
     "orders",
+    "payments",
     "report",
     "search",
 ]

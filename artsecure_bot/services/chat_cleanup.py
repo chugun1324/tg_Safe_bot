@@ -7,7 +7,7 @@ async def clear_chat_keep_message(
     bot: Bot,
     chat_id: int,
     keep_message_id: int,
-    history_window: int = 2000,
+    history_window: int = 300,
 ) -> None:
     start_id = max(1, keep_message_id - history_window)
     for message_id in range(start_id, keep_message_id):

@@ -9,7 +9,7 @@ from aiogram.enums import ParseMode
 
 from artsecure_bot.config import Settings, load_settings
 from artsecure_bot.db import init_db
-from artsecure_bot.handlers import admin, art, chat, common, nda, orders, report, search
+from artsecure_bot.handlers import admin, art, chat, common, nda, orders, payments, report, search
 from artsecure_bot.middlewares.rate_limit import RateLimitMiddleware
 
 
@@ -39,6 +39,7 @@ async def run_bot(settings: Settings) -> None:
         art.router,
         search.router,
         report.router,
+        payments.router,
         nda.router,
         chat.router,
         admin.router,

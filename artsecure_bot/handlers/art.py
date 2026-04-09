@@ -10,13 +10,24 @@ from aiogram.types import BufferedInputFile, CallbackQuery, Document, Message, P
 from artsecure_bot.db import session_scope
 from artsecure_bot.handlers.utils import build_main_menu_for_user, require_role
 from artsecure_bot.i18n import tr, variants
-from artsecure_bot.keyboards import art_kind_keyboard, flow_menu
+from artsecure_bot.keyboards import art_kind_keyboard, flow_menu, relay_menu
 from artsecure_bot.models import ArtAsset, ArtKind, OrderStatus, UserRole
 from artsecure_bot.services.repository import get_order_by_id, get_user_language
 from artsecure_bot.services.watermark import add_text_watermark
 from artsecure_bot.states import RelayState, SendArtState
 
 router = Router()
+
+
+def _relay_menu_for_artist(language: str, status: OrderStatus):
+    can_send_art = status in {
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.PREVIEW_SENT,
+        OrderStatus.PAID_ESCROW,
+        OrderStatus.FINAL_REVIEW,
+    }
+    can_mark_done = status in {OrderStatus.PAID_ESCROW, OrderStatus.FINAL_REVIEW}
+    return relay_menu(language=language, can_send_art=can_send_art, can_mark_done=can_mark_done)
 
 
 @router.message(Command("send_art"))
@@ -53,7 +64,7 @@ async def send_art_start(message: Message, state: FSMContext) -> None:
                 return
 
         await state.set_state(SendArtState.waiting_kind)
-        await state.update_data(order_id=order_id)
+        await state.update_data(order_id=order_id, from_relay=True)
         await message.answer(tr("send_art_choose_kind", lang), reply_markup=art_kind_keyboard(lang))
         return
 
@@ -128,6 +139,7 @@ async def send_art_media(message: Message, bot: Bot, state: FSMContext) -> None:
     data = await state.get_data()
     order_id = data.get("order_id")
     kind_value = data.get("kind")
+    from_relay = bool(data.get("from_relay"))
 
     async with session_scope() as session:
         lang = await get_user_language(session, message.from_user.id)
@@ -196,7 +208,9 @@ async def send_art_media(message: Message, bot: Bot, state: FSMContext) -> None:
                 protect_content=True,
             )
             watermark_file_id = sent.photo[-1].file_id if sent.photo else None
-            order.status = OrderStatus.PREVIEW_SENT
+            # Do not downgrade paid/final/disputed orders back to PREVIEW_SENT.
+            if order.status == OrderStatus.IN_PROGRESS:
+                order.status = OrderStatus.PREVIEW_SENT
 
         kind_db = ArtKind.PREVIEW
         asset = ArtAsset(
@@ -207,6 +221,27 @@ async def send_art_media(message: Message, bot: Bot, state: FSMContext) -> None:
             watermarked_file_id=watermark_file_id,
         )
         session.add(asset)
+
+    if from_relay:
+        await state.set_state(RelayState.waiting_message)
+        await state.update_data(order_id=order_id)
+        relay_kb = _relay_menu_for_artist(lang, order.status)
+        if kind_value == "preview":
+            await message.answer(tr("send_art_preview_done", lang), reply_markup=relay_kb)
+            try:
+                await bot.send_message(
+                    customer_tg,
+                    tr("send_art_preview_notify_customer", customer_lang, order_id=order_id),
+                    protect_content=True,
+                )
+            except Exception:
+                pass
+        else:
+            await message.answer(
+                tr("send_art_direct_done", lang, customer_ref=customer_ref),
+                reply_markup=relay_kb,
+            )
+        return
 
     await state.clear()
     if kind_value == "preview":

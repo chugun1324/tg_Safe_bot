@@ -50,7 +50,10 @@ def main_menu(
         kb.row(KeyboardButton(text=tr("btn_admin_stats", language)))
 
     kb.row(KeyboardButton(text=tr("btn_rules", language)), KeyboardButton(text=tr("btn_help", language)))
-    kb.row(KeyboardButton(text=tr("btn_language", language)))
+    kb.row(
+        KeyboardButton(text=tr("btn_wallet", language)),
+        KeyboardButton(text=tr("btn_language", language)),
+    )
     kb.row(KeyboardButton(text=tr("btn_exit", language)))
     return kb.as_markup(resize_keyboard=True)
 
@@ -192,5 +195,14 @@ def language_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text=tr("lang_ru", "ru"), callback_data="set_lang:ru")],
             [InlineKeyboardButton(text=tr("lang_en", "en"), callback_data="set_lang:en")],
+        ]
+    )
+
+
+def order_currency_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=tr("currency_rub", language), callback_data="order_currency:RUB")],
+            [InlineKeyboardButton(text=tr("currency_usd", language), callback_data="order_currency:USD")],
         ]
     )
