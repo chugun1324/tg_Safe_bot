@@ -45,14 +45,33 @@ async def require_role(message: Message, session: AsyncSession, role: UserRole) 
 
 async def build_main_menu_for_user(session: AsyncSession, user: User):
     language = await get_user_language(session, user.tg_id)
+    wallet_connected = bool(user.wallet_address)
     if user.role == UserRole.CUSTOMER:
         has_orders = await has_orders_for_customer(session, user.id)
-        return main_menu(user.role, has_orders=has_orders, can_send_art=False, language=language)
+        return main_menu(
+            user.role,
+            has_orders=has_orders,
+            can_send_art=False,
+            wallet_connected=wallet_connected,
+            language=language,
+        )
     if user.role == UserRole.ARTIST:
         has_orders = await has_orders_for_artist(session, user.id)
         can_send_art = await has_send_art_available_orders(session, user.id)
-        return main_menu(user.role, has_orders=has_orders, can_send_art=can_send_art, language=language)
-    return main_menu(user.role, has_orders=False, can_send_art=False, language=language)
+        return main_menu(
+            user.role,
+            has_orders=has_orders,
+            can_send_art=can_send_art,
+            wallet_connected=wallet_connected,
+            language=language,
+        )
+    return main_menu(
+        user.role,
+        has_orders=False,
+        can_send_art=False,
+        wallet_connected=wallet_connected,
+        language=language,
+    )
 
 
 async def language_by_tg_id(session: AsyncSession, tg_id: int | None) -> str:

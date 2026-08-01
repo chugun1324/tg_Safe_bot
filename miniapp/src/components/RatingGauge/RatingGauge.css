@@ -1,0 +1,31 @@
+.rating-gauge {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rating-gauge svg {
+  position: absolute;
+  inset: 0;
+}
+
+.rating-gauge-value {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  z-index: 1;
+}
+
+.rating-gauge-number {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.rating-gauge-max {
+  font-size: 10px;
+  color: var(--text-muted);
+}

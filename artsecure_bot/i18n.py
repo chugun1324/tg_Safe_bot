@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from typing import Final
 
 DEFAULT_LANGUAGE: Final[str] = "ru"
@@ -11,41 +12,80 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "lang_en": "English",
         "no_username": "без username",
         "unknown": "неизвестно",
-        "btn_help": "Помощь",
-        "btn_rules": "Правила",
-        "btn_exit": "Выход",
-        "btn_cancel": "Отмена",
-        "btn_leave_relay": "Выйти из чата",
-        "btn_mark_done": "Завершить",
-        "btn_create_order": "Создать заказ",
-        "btn_my_orders": "Мои заказы",
-        "btn_search": "Поиск исполнителя",
-        "btn_report": "Жалоба",
-        "btn_send_art": "Отправить работу",
-        "btn_admin_stats": "Статистика",
-        "btn_wallet": "Кошелек",
-        "btn_language": "Язык",
+        "btn_help": "🆘 Помощь",
+        "btn_rules": "📘 Правила",
+        "btn_rules_open_article": "🌐 Открыть правила в браузере",
+        "btn_exit": "🚪 Выход",
+        "btn_cancel": "❌ Отмена",
+        "btn_leave_relay": "↩️ Выйти из чата",
+        "btn_mark_done": "✅ Завершить",
+        "btn_create_order": "📝 Создать заказ",
+        "btn_my_orders": "📂 Мои заказы",
+        "btn_search": "🔎 Поиск исполнителя",
+        "btn_report": "🚩 Жалоба",
+        "btn_send_art": "🖼️ Отправить работу",
+        "btn_admin_stats": "📊 Статистика",
+        "btn_wallet": "💼 Кошелек",
+        "btn_language": "🌐 Язык",
+        "btn_share_username": "👤 Дать username",
         "btn_pay_wallet": "Оплатить через Wallet",
         "btn_pay_tonkeeper": "Оплатить через Tonkeeper",
         "btn_invoice_status": "Проверить оплату",
-        "role_customer": "Заказчик",
-        "role_artist": "Исполнитель",
-        "role_admin": "Админ",
+        "btn_pay_order": "Оплатить заказ",
+        "btn_topup_wallet": "Инструкция по пополнению кошелька",
+        "btn_open_topup": "Открыть пополнение",
+        "btn_back_payment_methods": "Назад к способам оплаты",
+        "btn_pay_other_soon": "Другие способы (скоро)",
+        "btn_relay_open_now": "Перейти в relay-чат",
+        "btn_yes": "Да",
+        "btn_no": "Нет",
+        "btn_view_portfolio": "🎨 Посмотреть портфолио",
+        "btn_create_order_with_artist": "📝 Создать заказ с этим исполнителем",
+        "btn_open_profile": "🖼 Открыть профиль",
+        "portfolio_empty": "У исполнителя пока нет работ в портфолио",
+        "btn_profile": "👤 Профиль",
+        "btn_show_profile": "✅ Показать профиль",
+        "btn_hide_profile": "❌ Скрыть профиль",
+        "btn_search_by_username": "🔍 Поиск по username",
+        "btn_search_random": "🎲 Случайный поиск",
+        "btn_take_artist": "✅ Взять",
+        "btn_skip_artist": "➡️ Не взять",
+        "profile_management_title": "Управление профилем",
+        "profile_status_visible": "Ваш профиль виден заказчикам при автоматическом поиске",
+        "profile_status_hidden": "Ваш профиль скрыт от автоматического поиска",
+        "profile_visibility_updated": "Видимость профиля обновлена",
+        "profile_empty_owner_prompt": (
+            "Похоже, ваш профиль ещё не заполнен — заказчики видят его пустым.\n"
+            "Нажмите «{btn_open_profile}», чтобы добавить описание и работы в портфолио."
+        ),
+        "choose_search_type": "Выберите способ поиска исполнителя:",
+        "search_type_help": "• Поиск по username - вы вводите @username конкретного исполнителя\n• Случайный поиск - система подберет доступного исполнителя автоматически",
+        "artist_profile_preview": (
+            "Исполнитель найден:\n"
+            "👤 Username: @{artist_username}\n"
+            "📊 Завершено заказов: {completed_orders}\n"
+            "⭐️ Рейтинг: {rating}/100\n"
+            "📝 О себе: {bio}"
+        ),
+        "artist_profile_preview_no_bio": "не указано",
+        "role_customer": "🧑‍💼 Заказчик",
+        "role_artist": "🎨 Исполнитель",
+        "role_admin": "🛡️ Админ",
         "currency_rub": "РУБ",
         "currency_usd": "USD",
         "currency_usdt": "USDT",
-        "order_decision_accept": "Принять",
-        "order_decision_reject": "Отклонить",
+        "order_decision_accept": "✅ Принять",
+        "order_decision_reject": "✖️ Отклонить",
         "art_kind_preview": "Предпросмотр",
         "art_kind_final": "Финал",
         "art_kind_direct": "Медиа 1:1",
-        "order_action_paid": "Оплачено (escrow)",
-        "order_action_release": "Релиз исполнителю",
-        "order_action_dispute": "Открыть спор",
-        "order_action_relay": "Открыть чат сделки",
-        "order_action_delete": "Удалить заказ",
-        "dispute_reason_not_order": "Не тот заказ",
-        "dispute_reason_other": "Другое",
+        "order_action_paid": "💳 Оплатить (escrow)",
+        "order_action_release": "💸 Релиз исполнителю",
+        "order_action_dispute": "⚠️ Открыть спор",
+        "order_action_relay": "💬 Открыть чат сделки",
+        "order_action_delete": "🗑️ Удалить заказ",
+        "dispute_reason_not_order": "❌ Не тот заказ",
+        "dispute_reason_other": "ℹ️ Другое",
         "status_pending_artist": "Ожидает ответа исполнителя",
         "status_in_progress": "В работе",
         "status_preview_sent": "Предпросмотр отправлен",
@@ -58,16 +98,39 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "err_not_registered": "Сначала зарегистрируйтесь через /start",
         "err_banned": "Ваш аккаунт ограничен администратором.",
         "err_wrong_role": "Эта команда доступна для другой роли пользователя.",
-        "start_welcome": "Добро пожаловать в ArtSecure.",
+        "start_welcome": (
+            "Добро пожаловать в ArtSecure.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
         "start_choose_role": "Выберите вашу роль:",
         "start_registered": "Вы уже зарегистрированы как {role}. Используйте кнопки меню ниже.",
         "invalid_role": "Неверная роль",
-        "ask_nickname": "Введите ваш ник (псевдоним):",
-        "nick_too_short": "Ник слишком короткий. Минимум 2 символа.",
-        "ask_contact": "Укажите контакт (Telegram @username или другой способ связи):",
-        "contact_too_short": "Контакт слишком короткий.",
+        "ask_contact_username_only": (
+            "Укажите ваш Telegram username в формате @username.\n"
+            "Можно нажать кнопку ниже или ввести вручную."
+        ),
+        "registration_username_required": (
+            "У вас не установлен username в Telegram.\n"
+            "Откройте настройки Telegram и добавьте username, затем отправьте его сюда в формате @username."
+        ),
+        "registration_username_mismatch": (
+            "Нужно отправить именно ваш username: {username}.\n"
+            "Проверьте ввод и попробуйте снова."
+        ),
         "registration_expired": "Сессия регистрации устарела. Повторите /start",
         "registration_done": "Регистрация завершена. Роль: {role}.",
+        "registration_quick_guide": (
+            "Кратко по главному меню:\n"
+            "{btn_create_order} — создать новый заказ\n"
+            "{btn_my_orders} — открыть ваши заказы\n"
+            "{btn_report} — отправить жалобу\n"
+            "{btn_wallet} — указать адрес кошелька\n"
+            "{btn_help} — подсказки по командам\n"
+            "{btn_language} — сменить язык\n\n"
+            "Важно: сначала обязательно заполните кошелек, иначе заказы будут недоступны.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
+        "wallet_address_screenshot_caption": "Пример, где взять адрес кошелька:",
         "help_text": (
             "Команды и кнопки:\n"
             "/start - регистрация\n"
@@ -79,33 +142,26 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "{btn_report} / /report\n"
             "/relay &lt;id&gt; - защищенный relay-чат по заказу\n"
             "/leave_relay - выйти из relay-чата\n"
-            "/pay &lt;id&gt; - имитация escrow оплаты\n"
+            "/pay &lt;id&gt; - escrow оплата\n"
             "/invoice &lt;id&gt; - создать крипто-инвойс escrow\n"
             "/invoice_status &lt;id&gt; - статус инвойса\n"
-            "/mock_paid &lt;id&gt; - подтвердить оплату в mock-режиме\n"
             "/set_wallet &lt;address&gt; - подключить кошелек заказчика\n"
             "/wallet - показать подключенный кошелек\n"
             "/release &lt;id&gt; - релиз средств исполнителю\n"
             "/dispute &lt;id&gt; - открыть спор\n"
-            "/force_close &lt;id&gt; - принудительно закрыть заказ\n"
-            "/nda &lt;id&gt; - шаблон NDA в PDF\n"
             "/langue - смена языка\n"
             "Поддержка: {support_chat_url}"
         ),
-        "rules_text": (
-            "Правила ArtSecure:\n"
-            "1) Кража ИС запрещена, за повторные жалобы выдается бан.\n"
-            "2) Комиссия платформы: 10% (или 0% при премиуме исполнителя).\n"
-            "3) Споры рассматриваются админом до 7 дней.\n"
-            "4) Protect content и disappearing media снижают риск, но не дают 100% защиты.\n"
-            "5) Новости: {news_channel}"
-        ),
+        "rules_link_text": "Полная статья с правилами: {rules_url}",
         "scenario_cancelled": "Текущий сценарий отменен.",
         "exit_role_selecting": "Выход в выбор роли.",
         "exit_role_selected": "Вы вернулись к выбору роли. Нажмите нужную кнопку:",
         "language_choose": "Выберите язык интерфейса:",
         "language_saved": "Язык обновлен: {language_name}",
-        "create_ask_artist": "Введите @username исполнителя, которому хотите отправить заявку:",
+        "create_ask_artist": "Введите @username исполнителя, которому хотите отправить заявку, или отправьте 'авто' для автоматического выбора:",
+        "btn_auto_artist": "🎲 Автоматический выбор",
+        "no_available_artists": "Нет доступных исполнителей. Попробуйте позже.",
+        "artist_auto_selected": "Автоматически выбран исполнитель: @{artist_username}",
         "username_invalid": "Некорректный username. Пример: @artist_name (5-32 символа, буквы/цифры/_)",
         "username_not_exists": "Такого Telegram username не существует.",
         "username_not_registered_artist": (
@@ -191,8 +247,25 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pay_not_your_order": "Это не ваш заказ.",
         "payment_wallet_not_configured": "Escrow-кошелек пока не настроен в .env (ESCROW_WALLET_ADDRESS).",
         "wallet_not_connected": "Сначала подключите кошелек: /set_wallet &lt;wallet_address&gt;",
+        "wallet_required_before_orders": (
+            "Сначала заполните кошелек через кнопку «{btn_wallet}».\n"
+            "До этого создание и просмотр заказов недоступны."
+        ),
         "wallet_connected": "Ваш кошелек: {wallet_address}",
         "wallet_saved": "Кошелек сохранен: {wallet_address}",
+        "wallet_existing_prompt": (
+            "Текущий кошелек: {wallet_address}\n"
+            "Оставить этот кошелек или сменить?"
+        ),
+        "wallet_keep_current": "✅ Оставить текущий",
+        "wallet_change_current": "✏️ Сменить кошелек",
+        "wallet_keep_done": "Текущий кошелек оставлен без изменений.",
+        "wallet_payout_warning": (
+            "Внимание: выплаты и возвраты по заказам будут отправляться только на этот адрес.\n"
+            "Проверьте адрес внимательно перед каждой сделкой.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper\n"
+            "Ниже пример, где смотреть адрес в кошельке."
+        ),
         "wallet_address_invalid": "Некорректный адрес кошелька.",
         "wallet_address_not_found": "Кошелек не найден в сети TON. Проверьте адрес.",
         "wallet_check_unavailable": "Не удалось проверить кошелек через TON API. Попробуйте позже.",
@@ -205,6 +278,36 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "wallet_enter_prompt": "Введите адрес TON-кошелька для переводов:",
         "wallet_not_enough_balance": "Недостаточно USDT на кошельке. Пополните Wallet и повторите оплату.",
+        "invoice_payment_menu": (
+            "Заказ #{order_id}\n"
+            "Сумма: {amount_usdt} USDT\n"
+            "Адрес: {payment_address}\n"
+            "Memo: {payment_memo}\n"
+            "Выберите способ оплаты ниже.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
+        "invoice_method_choice": (
+            "Заказ #{order_id}\n"
+            "Сумма: {amount_usdt} USDT\n"
+            "Способ: {method}\n"
+            "Далее выберите: «Оплатить заказ» или «Инструкция по пополнению кошелька»."
+        ),
+        "pay_method_soon_notice": "Этот способ оплаты будет добавлен позже.",
+        "topup_wallet_instructions": (
+            "Инструкция по пополнению через Wallet Telegram:\n"
+            "1) Откройте Wallet.\n"
+            "2) Выберите пополнение (карта/P2P Express).\n"
+            "3) Пополните баланс и вернитесь в бот.\n"
+            "4) Нажмите «Проверить оплату»."
+        ),
+        "topup_tonkeeper_instructions": (
+            "Инструкция по пополнению через Tonkeeper:\n"
+            "1) Установите или откройте Tonkeeper.\n"
+            "2) Пополните TON/USDT через встроенные способы.\n"
+            "3) Вернитесь в бот и выберите «Оплатить заказ».\n"
+            "4) После перевода нажмите «Проверить оплату».\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
         "invoice_created": (
             "Инвойс #{invoice_id} по заказу #{order_id} создан.\n"
             "Сумма: {amount_usdt} USDT\n"
@@ -217,25 +320,24 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Проверка статуса: /invoice_status {invoice_id}"
         ),
         "invoice_not_found": "Инвойс не найден.",
-        "invoice_status_card": (
-            "Инвойс #{invoice_id}\n"
-            "Заказ: #{order_id}\n"
-            "Статус: {status}\n"
+        "invoice_status_compact": (
+            "Заказ #{order_id}\n"
             "Сумма: {amount_usdt} USDT\n"
-            "Memo: {payment_memo}\n"
-            "Tx: {tx_hash}\n"
-            "Срок до: {expires_at}"
+            "Статус оплаты: {status_line}"
         ),
+        "payment_status_created": "Ожидает оплаты",
+        "payment_status_awaiting_payment": "Ожидает оплаты",
+        "payment_status_paid_pending_confirm": "Проверяется",
+        "payment_status_confirmed": "Оплачено",
+        "payment_status_underpaid": "Недоплата",
+        "payment_status_overpaid": "Переплата",
+        "payment_status_expired": "Истек",
+        "payment_status_released": "Оплачено",
+        "payment_status_refunded": "Возврат",
+        "payment_status_cancelled": "Отменен",
         "invoice_status_checking": "Идет проверка оплаты...",
-        "invoice_paid_notify_customer": (
-            "Оплата по заказу #{order_id} подтверждена.\n"
-            "Tx: {tx_hash}"
-        ),
-        "invoice_paid_notify_artist": (
-            "Escrow по заказу #{order_id} пополнен.\n"
-            "Можно продолжать работу по заказу.\n"
-            "Tx: {tx_hash}"
-        ),
+        "invoice_paid_notify_customer": "Оплата успешно выполнена, по заказу #{order_id}.",
+        "invoice_paid_notify_artist": "Оплата успешно выполнена, по заказу #{order_id}.",
         "mock_only_mode": "Команда доступна только в PAYMENTS_MODE=mock.",
         "mock_paid_done": (
             "MOCK-оплата подтверждена.\n"
@@ -262,6 +364,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "dispute_not_participant": "Вы не участник этого заказа.",
         "dispute_choose_reason": "Выберите причину спора по заказу #{order_id}:",
+        "dispute_confirm_open": "Вы уверены, что хотите открыть спор по заказу #{order_id}? Заказ будет временно приостановлен.",
+        "dispute_open_cancelled": "Спор не открыт. Заказ продолжает выполняться.",
+        "dispute_already_under_review": "Спор уже открыт и находится на рассмотрении.",
         "dispute_opened": "Спор по заказу #{order_id} открыт. Администратор рассмотрит его в течение 7 дней.",
         "dispute_opened_with_reason": (
             "Спор по заказу #{order_id} открыт. Администратор рассмотрит его в течение 7 дней.\n"
@@ -281,6 +386,17 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "delete_only_customer": "Удалять заказ может только заказчик.",
         "delete_order_done": "Заказ #{order_id} удален из списка.",
         "delete_order_notify_artist": "Заказ #{order_id} был удален заказчиком и скрыт из ваших списков.",
+        "delete_order_paid_confirm": (
+            "Заказ #{order_id} уже оплачен ({amount_usdt} USDT в escrow).\n"
+            "Удалить заказ и вернуть средства на ваш кошелек?"
+        ),
+        "delete_order_paid_cancelled": "Удаление оплаченного заказа отменено.",
+        "delete_order_refund_wallet_missing": (
+            "Невозможно вернуть средства: у вас не заполнен кошелек. "
+            "Сначала заполните «Кошелек», затем повторите удаление."
+        ),
+        "delete_order_refund_failed": "Возврат средств временно недоступен. Заказ не удален, попробуйте позже.",
+        "delete_order_refund_done": "Возврат выполнен: {amount_usdt} USDT отправлено на {wallet_address}.",
         "cb_use_pay": "Используйте команду /pay &lt;id&gt;",
         "cb_use_release": "Используйте команду /release &lt;id&gt;",
         "cb_use_dispute": "Используйте команду /dispute &lt;id&gt;",
@@ -299,8 +415,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_not_participant_anymore": "Вы больше не участник этого заказа.",
         "relay_sender_customer": "Заказчик",
         "relay_sender_artist": "Исполнитель",
-        "relay_forward": "[Relay заказ #{order_id}] {sender_role} {sender_name}:\n{text}",
-        "relay_media_forward": "[Relay заказ #{order_id}] {sender_role} {sender_name} отправил медиафайл.",
+        "relay_forward": "{sender_name}: {text}",
+        "relay_forward_other_order": "[Relay заказ #{order_id}] {sender_name}: {text}",
+        "relay_media_forward": "{sender_name} отправил медиафайл.",
+        "relay_media_forward_other_order": "[Relay заказ #{order_id}] {sender_name} отправил медиафайл.",
         "relay_media_use_send_art": "Для отправки работы используйте кнопку «Отправить работу».",
         # "relay_sent": "Сообщение отправлено.",
         "relay_done_not_paid": "Завершение доступно только после оплаты escrow.",
@@ -309,13 +427,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_done_wait_other": "Ожидаем подтверждение второй стороны.",
         "relay_done_progress": "Подтверждения: заказчик={customer_done}, исполнитель={artist_done}.",
         "relay_done_other_confirmed": "Вторая сторона нажала «{done_label}».",
+        "relay_done_no_artwork": "Нельзя завершить заказ: исполнитель еще не отправил работу в бота.",
         "relay_review_started": (
             "Обе стороны нажали «{done_label}». Начат этап финальной проверки.\n"
-            "Дедлайн: {deadline}\n"
-            "До дедлайна можно открыть спор. Если спор не открыт — средства автоматически уйдут исполнителю."
+            "{minutes} минут до окончания проверки.\n"
+            "В этот период можно открыть спор. Если спор не открыт — средства автоматически уйдут исполнителю."
         ),
         "relay_review_wait": (
-            "Идет финальная проверка до {deadline}.\n"
+            "Идет финальная проверка. {minutes} минут до окончания проверки.\n"
             "Если есть проблема — откройте спор до окончания таймера."
         ),
         "relay_done_complete": (
@@ -380,21 +499,32 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "send_art_direct_done": (
             "1:1 медиа подготовлено.\n"
             "Инструкция:\n"
-            "1) Откройте личный чат с заказчиком ({customer_ref}).\n"
-            "2) Отправьте этот файл как медиа «один просмотр».\n"
-            "3) Дополнительно подтвердите отправку в relay-чате."
+            "1) Скачайте изображение выше, на котором есть уникальная маска.\n"
+            "2) Перейдите в чат с заказчиком ({customer_ref}).\n"
+            "3) Отправьте медиафайл «на один просмотр», как показано в инструкции ниже.\n"
+            "4) Скриншоты к шагу 3 отправлены ниже."
         ),
+        "send_art_controls": "Дальше используйте кнопки ниже.",
         "send_art_uploaded_notify_customer": (
             "Заказ #{order_id}: исполнитель загрузил работу в бота.\n"
             "Всего загружено работ: {count}."
         ),
-        "report_ask_target": "Введите TG ID пользователя, на которого хотите пожаловаться:",
-        "report_target_id_number": "TG ID должен быть числом.",
-        "report_ask_order_id": "Укажите ID заказа (или 0, если жалоба не связана с заказом):",
-        "report_order_number_or_zero": "Нужен числовой ID заказа или 0.",
-        "report_ask_reason": "Опишите причину жалобы:",
+        "report_ask_target_username": (
+            "Введите username пользователя в формате @username, на которого хотите пожаловаться."
+        ),
+        "report_target_username_invalid": "Некорректный формат. Пример: @artist_name",
+        "report_target_self_forbidden": "Нельзя отправить жалобу на самого себя.",
+        "report_ask_order_pick": "Выберите заказ, к которому относится жалоба:",
+        "report_order_pick_button": "Заказ #{order_id} — {title}",
+        "report_order_pick_none": "Не связано с заказом",
+        "report_order_pick_invalid": "Этот заказ недоступен для выбора.",
+        "report_use_buttons_for_order": "Выберите заказ кнопками ниже.",
+        "report_ask_reason": (
+            "Опишите проблему понятным текстом.\n"
+            "Пример: «Исполнитель отправил не тот файл, и отказывается исправлять»."
+        ),
         "report_reason_short": "Опишите проблему подробнее (минимум 8 символов).",
-        "report_target_not_found": "Пользователь с таким TG ID не найден в системе.",
+        "report_target_not_found": "Пользователь с таким username не найден в системе.",
         "report_created": "Жалоба #{report_id} создана. Администратор рассмотрит ее в течение 7 дней.",
         "search_no_results": "Исполнители не найдены.",
         "search_results_title": "Найденные исполнители:",
@@ -520,41 +650,80 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "lang_en": "English",
         "no_username": "no username",
         "unknown": "unknown",
-        "btn_help": "Help",
-        "btn_rules": "Rules",
-        "btn_exit": "Exit",
-        "btn_cancel": "Cancel",
-        "btn_leave_relay": "Leave Chat",
-        "btn_mark_done": "Complete",
-        "btn_create_order": "Create Order",
-        "btn_my_orders": "My Orders",
-        "btn_search": "Find Artist",
-        "btn_report": "Report",
-        "btn_send_art": "Send Artwork",
-        "btn_admin_stats": "Stats",
-        "btn_wallet": "Wallet",
-        "btn_language": "Language",
+        "btn_help": "🆘 Help",
+        "btn_rules": "📘 Rules",
+        "btn_rules_open_article": "🌐 Open Rules in Browser",
+        "btn_exit": "🚪 Exit",
+        "btn_cancel": "❌ Cancel",
+        "btn_leave_relay": "↩️ Leave Chat",
+        "btn_mark_done": "✅ Complete",
+        "btn_create_order": "📝 Create Order",
+        "btn_my_orders": "📂 My Orders",
+        "btn_search": "🔎 Find Artist",
+        "btn_report": "🚩 Report",
+        "btn_send_art": "🖼️ Send Artwork",
+        "btn_admin_stats": "📊 Stats",
+        "btn_wallet": "💼 Wallet",
+        "btn_language": "🌐 Language",
+        "btn_share_username": "👤 Share username",
         "btn_pay_wallet": "Pay via Wallet",
         "btn_pay_tonkeeper": "Pay via Tonkeeper",
         "btn_invoice_status": "Check Payment",
-        "role_customer": "Customer",
-        "role_artist": "Artist",
-        "role_admin": "Admin",
+        "btn_pay_order": "Pay order",
+        "btn_topup_wallet": "Wallet top-up guide",
+        "btn_open_topup": "Open top-up",
+        "btn_back_payment_methods": "Back to payment methods",
+        "btn_pay_other_soon": "Other methods (soon)",
+        "btn_relay_open_now": "Open relay chat",
+        "btn_yes": "Yes",
+        "btn_no": "No",
+        "btn_view_portfolio": "🎨 View portfolio",
+        "btn_create_order_with_artist": "📝 Create order with this artist",
+        "btn_open_profile": "🖼 Open profile",
+        "portfolio_empty": "Artist has no portfolio items yet",
+        "btn_profile": "👤 Profile",
+        "btn_show_profile": "✅ Show profile",
+        "btn_hide_profile": "❌ Hide profile",
+        "btn_search_by_username": "🔍 Search by username",
+        "btn_search_random": "🎲 Random search",
+        "btn_take_artist": "✅ Take",
+        "btn_skip_artist": "➡️ Skip",
+        "profile_management_title": "Profile management",
+        "profile_status_visible": "Your profile is visible to customers in automatic search",
+        "profile_status_hidden": "Your profile is hidden from automatic search",
+        "profile_visibility_updated": "Profile visibility updated",
+        "profile_empty_owner_prompt": (
+            "Looks like your profile is still empty — customers see a blank page.\n"
+            "Tap «{btn_open_profile}» to add a bio and portfolio works."
+        ),
+        "choose_search_type": "Choose artist search method:",
+        "search_type_help": "• Search by username - enter specific artist @username\n• Random search - system will automatically select available artist",
+        "artist_profile_preview": (
+            "Artist found:\n"
+            "👤 Username: @{artist_username}\n"
+            "📊 Completed orders: {completed_orders}\n"
+            "⭐️ Rating: {rating}/100\n"
+            "📝 Bio: {bio}"
+        ),
+        "artist_profile_preview_no_bio": "not specified",
+        "role_customer": "🧑‍💼 Customer",
+        "role_artist": "🎨 Artist",
+        "role_admin": "🛡️ Admin",
         "currency_rub": "RUB",
         "currency_usd": "USD",
         "currency_usdt": "USDT",
-        "order_decision_accept": "Accept",
-        "order_decision_reject": "Reject",
+        "order_decision_accept": "✅ Accept",
+        "order_decision_reject": "✖️ Reject",
         "art_kind_preview": "Preview",
         "art_kind_final": "Final",
         "art_kind_direct": "1:1 Media",
-        "order_action_paid": "Paid (escrow)",
-        "order_action_release": "Release to Artist",
-        "order_action_dispute": "Open Dispute",
-        "order_action_relay": "Open Deal Chat",
-        "order_action_delete": "Delete Order",
-        "dispute_reason_not_order": "Wrong order",
-        "dispute_reason_other": "Other",
+        "order_action_paid": "💳 Pay (escrow)",
+        "order_action_release": "💸 Release to Artist",
+        "order_action_dispute": "⚠️ Open Dispute",
+        "order_action_relay": "💬 Open Deal Chat",
+        "order_action_delete": "🗑️ Delete Order",
+        "dispute_reason_not_order": "❌ Wrong order",
+        "dispute_reason_other": "ℹ️ Other",
         "status_pending_artist": "Waiting for artist response",
         "status_in_progress": "In progress",
         "status_preview_sent": "Preview sent",
@@ -567,16 +736,39 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "err_not_registered": "Please register first via /start",
         "err_banned": "Your account is restricted by administrator.",
         "err_wrong_role": "This action is available for another role.",
-        "start_welcome": "Welcome to ArtSecure.",
+        "start_welcome": (
+            "Welcome to ArtSecure.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
         "start_choose_role": "Choose your role:",
         "start_registered": "You are already registered as {role}. Use the menu buttons below.",
         "invalid_role": "Invalid role",
-        "ask_nickname": "Enter your nickname:",
-        "nick_too_short": "Nickname is too short. Minimum 2 characters.",
-        "ask_contact": "Provide contact (Telegram @username or another contact):",
-        "contact_too_short": "Contact is too short.",
+        "ask_contact_username_only": (
+            "Send your Telegram username in format @username.\n"
+            "You can tap the button below or type it manually."
+        ),
+        "registration_username_required": (
+            "You don't have Telegram username yet.\n"
+            "Set it in Telegram settings and send it here in format @username."
+        ),
+        "registration_username_mismatch": (
+            "Please send your own username: {username}.\n"
+            "Check input and try again."
+        ),
         "registration_expired": "Registration session expired. Repeat /start",
         "registration_done": "Registration completed. Role: {role}.",
+        "registration_quick_guide": (
+            "Quick main menu guide:\n"
+            "{btn_create_order} - create a new order\n"
+            "{btn_my_orders} - open your orders\n"
+            "{btn_report} - send a complaint\n"
+            "{btn_wallet} - set wallet address\n"
+            "{btn_help} - command tips\n"
+            "{btn_language} - change language\n\n"
+            "Important: set wallet first, otherwise order actions are disabled.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
+        "wallet_address_screenshot_caption": "Example where to find wallet address:",
         "help_text": (
             "Commands and buttons:\n"
             "/start - registration\n"
@@ -591,30 +783,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "/pay &lt;id&gt; - mock escrow payment\n"
             "/invoice &lt;id&gt; - create crypto escrow invoice\n"
             "/invoice_status &lt;id&gt; - invoice status\n"
-            "/mock_paid &lt;id&gt; - confirm payment in mock mode\n"
             "/set_wallet &lt;address&gt; - connect customer wallet\n"
             "/wallet - show connected wallet\n"
             "/release &lt;id&gt; - release funds to artist\n"
             "/dispute &lt;id&gt; - open dispute\n"
-            "/force_close &lt;id&gt; - force close order\n"
-            "/nda &lt;id&gt; - NDA PDF template\n"
             "/langue - switch language\n"
             "Support: {support_chat_url}"
         ),
-        "rules_text": (
-            "ArtSecure rules:\n"
-            "1) IP theft is forbidden, repeated complaints lead to ban.\n"
-            "2) Platform fee: 10% (or 0% for premium artist).\n"
-            "3) Disputes are handled by admin up to 7 days.\n"
-            "4) Protect content and disappearing media reduce risk, but not 100%.\n"
-            "5) News: {news_channel}"
-        ),
+        "rules_link_text": "Full rules article: {rules_url}",
         "scenario_cancelled": "Current scenario canceled.",
         "exit_role_selecting": "Back to role selection.",
         "exit_role_selected": "You returned to role selection. Click a role button:",
         "language_choose": "Choose interface language:",
         "language_saved": "Language updated: {language_name}",
-        "create_ask_artist": "Enter artist @username to send request:",
+        "create_ask_artist": "Enter artist @username to send request, or send 'auto' for automatic selection:",
+        "btn_auto_artist": "🎲 Auto select",
+        "no_available_artists": "No available artists. Try again later.",
+        "artist_auto_selected": "Artist auto-selected: @{artist_username}",
         "username_invalid": "Invalid username. Example: @artist_name (5-32 chars, letters/digits/_)",
         "username_not_exists": "This Telegram username does not exist.",
         "username_not_registered_artist": (
@@ -695,8 +880,25 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pay_not_your_order": "This is not your order.",
         "payment_wallet_not_configured": "Escrow wallet is not configured in .env (ESCROW_WALLET_ADDRESS).",
         "wallet_not_connected": "Connect wallet first: /set_wallet &lt;wallet_address&gt;",
+        "wallet_required_before_orders": (
+            "Please fill wallet via «{btn_wallet}» first.\n"
+            "Until then creating and viewing orders is disabled."
+        ),
         "wallet_connected": "Your wallet: {wallet_address}",
         "wallet_saved": "Wallet saved: {wallet_address}",
+        "wallet_existing_prompt": (
+            "Current wallet: {wallet_address}\n"
+            "Keep this wallet or change it?"
+        ),
+        "wallet_keep_current": "✅ Keep current",
+        "wallet_change_current": "✏️ Change wallet",
+        "wallet_keep_done": "Current wallet was kept unchanged.",
+        "wallet_payout_warning": (
+            "Important: payouts and refunds for orders will be sent only to this wallet address.\n"
+            "Double-check it carefully before each deal.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper\n"
+            "See the example below where to find the wallet address."
+        ),
         "wallet_address_invalid": "Invalid wallet address.",
         "wallet_address_not_found": "Wallet was not found in TON network. Check the address.",
         "wallet_check_unavailable": "Unable to verify wallet via TON API now. Please try again later.",
@@ -709,6 +911,36 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "wallet_enter_prompt": "Enter TON wallet address for transfers:",
         "wallet_not_enough_balance": "Not enough USDT in wallet. Please top up Wallet and retry.",
+        "invoice_payment_menu": (
+            "Order #{order_id}\n"
+            "Amount: {amount_usdt} USDT\n"
+            "Address: {payment_address}\n"
+            "Memo: {payment_memo}\n"
+            "Choose payment method below.\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
+        "invoice_method_choice": (
+            "Order #{order_id}\n"
+            "Amount: {amount_usdt} USDT\n"
+            "Method: {method}\n"
+            "Choose next step: \"Pay order\" or \"Wallet top-up guide\"."
+        ),
+        "pay_method_soon_notice": "This payment method will be added later.",
+        "topup_wallet_instructions": (
+            "Wallet Telegram top-up guide:\n"
+            "1) Open Wallet.\n"
+            "2) Choose top up (card/P2P Express).\n"
+            "3) Add balance and return to bot.\n"
+            "4) Press \"Check Payment\"."
+        ),
+        "topup_tonkeeper_instructions": (
+            "Tonkeeper top-up guide:\n"
+            "1) Install or open Tonkeeper.\n"
+            "2) Top up TON/USDT using built-in options.\n"
+            "3) Return to bot and choose \"Pay order\".\n"
+            "4) After transfer press \"Check Payment\".\n"
+            "Tonkeeper (Android): https://play.google.com/store/apps/details?id=com.ton_keeper"
+        ),
         "invoice_created": (
             "Invoice #{invoice_id} for order #{order_id} created.\n"
             "Amount: {amount_usdt} USDT\n"
@@ -721,25 +953,24 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Check status: /invoice_status {invoice_id}"
         ),
         "invoice_not_found": "Invoice not found.",
-        "invoice_status_card": (
-            "Invoice #{invoice_id}\n"
-            "Order: #{order_id}\n"
-            "Status: {status}\n"
+        "invoice_status_compact": (
+            "Order #{order_id}\n"
             "Amount: {amount_usdt} USDT\n"
-            "Memo: {payment_memo}\n"
-            "Tx: {tx_hash}\n"
-            "Expires at: {expires_at}"
+            "Payment status: {status_line}"
         ),
+        "payment_status_created": "Awaiting payment",
+        "payment_status_awaiting_payment": "Awaiting payment",
+        "payment_status_paid_pending_confirm": "Checking",
+        "payment_status_confirmed": "Paid",
+        "payment_status_underpaid": "Underpaid",
+        "payment_status_overpaid": "Overpaid",
+        "payment_status_expired": "Expired",
+        "payment_status_released": "Paid",
+        "payment_status_refunded": "Refunded",
+        "payment_status_cancelled": "Cancelled",
         "invoice_status_checking": "Checking payment status...",
-        "invoice_paid_notify_customer": (
-            "Payment for order #{order_id} is confirmed.\n"
-            "Tx: {tx_hash}"
-        ),
-        "invoice_paid_notify_artist": (
-            "Escrow for order #{order_id} is funded.\n"
-            "You can continue the deal now.\n"
-            "Tx: {tx_hash}"
-        ),
+        "invoice_paid_notify_customer": "Payment completed successfully for order #{order_id}.",
+        "invoice_paid_notify_artist": "Payment completed successfully for order #{order_id}.",
         "mock_only_mode": "This command is available only in PAYMENTS_MODE=mock.",
         "mock_paid_done": (
             "MOCK payment confirmed.\n"
@@ -766,6 +997,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "dispute_not_participant": "You are not a participant of this order.",
         "dispute_choose_reason": "Choose dispute reason for order #{order_id}:",
+        "dispute_confirm_open": "Are you sure you want to open a dispute for order #{order_id}? The order will be temporarily paused.",
+        "dispute_open_cancelled": "Dispute was not opened. The order will continue.",
+        "dispute_already_under_review": "This dispute is already open and under review.",
         "dispute_opened": "Dispute for order #{order_id} opened. Admin will review within 7 days.",
         "dispute_opened_with_reason": (
             "Dispute for order #{order_id} opened. Admin will review within 7 days.\n"
@@ -785,6 +1019,17 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "delete_only_customer": "Only customer can delete order.",
         "delete_order_done": "Order #{order_id} was deleted from lists.",
         "delete_order_notify_artist": "Order #{order_id} was deleted by customer and removed from your lists.",
+        "delete_order_paid_confirm": (
+            "Order #{order_id} is already paid ({amount_usdt} USDT in escrow).\n"
+            "Delete this order and refund funds to your wallet?"
+        ),
+        "delete_order_paid_cancelled": "Paid order deletion was cancelled.",
+        "delete_order_refund_wallet_missing": (
+            "Refund is not possible: wallet is not set. "
+            "Set your wallet first, then retry deletion."
+        ),
+        "delete_order_refund_failed": "Refund is temporarily unavailable. Order was not deleted, try again later.",
+        "delete_order_refund_done": "Refund completed: {amount_usdt} USDT sent to {wallet_address}.",
         "cb_use_pay": "Use /pay &lt;id&gt;",
         "cb_use_release": "Use /release &lt;id&gt;",
         "cb_use_dispute": "Use /dispute &lt;id&gt;",
@@ -803,8 +1048,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_not_participant_anymore": "You are no longer participant of this order.",
         "relay_sender_customer": "Customer",
         "relay_sender_artist": "Artist",
-        "relay_forward": "[Relay order #{order_id}] {sender_role} {sender_name}:\n{text}",
-        "relay_media_forward": "[Relay order #{order_id}] {sender_role} {sender_name} sent a media file.",
+        "relay_forward": "{sender_name}: {text}",
+        "relay_forward_other_order": "[Relay order #{order_id}] {sender_name}: {text}",
+        "relay_media_forward": "{sender_name} sent a media file.",
+        "relay_media_forward_other_order": "[Relay order #{order_id}] {sender_name} sent a media file.",
         "relay_media_use_send_art": "Use the \"Send Artwork\" button to deliver the work.",
         # "relay_sent": "Message sent.",
         "relay_done_not_paid": "Completion is available only after escrow payment.",
@@ -813,13 +1060,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "relay_done_wait_other": "Waiting for the other side confirmation.",
         "relay_done_progress": "Confirmations: customer={customer_done}, artist={artist_done}.",
         "relay_done_other_confirmed": "The other side pressed \"{done_label}\".",
+        "relay_done_no_artwork": "You cannot complete order yet: artist has not uploaded work to the bot.",
         "relay_review_started": (
             "Both sides pressed \"{done_label}\". Final timed review has started.\n"
-            "Deadline: {deadline}\n"
-            "You can open dispute before deadline. If dispute is not opened, funds are auto-released to artist."
+            "{minutes} minutes left until review ends.\n"
+            "You can open dispute during this period. If dispute is not opened, funds are auto-released to artist."
         ),
         "relay_review_wait": (
-            "Final review is active until {deadline}.\n"
+            "Final review is active. {minutes} minutes left until it ends.\n"
             "If something is wrong, open dispute before timer ends."
         ),
         "relay_done_complete": (
@@ -884,21 +1132,30 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "send_art_direct_done": (
             "1:1 media prepared.\n"
             "Instruction:\n"
-            "1) Open private chat with customer ({customer_ref}).\n"
-            "2) Send this file as \"one-time view\" media.\n"
-            "3) Confirm delivery in relay chat."
+            "1) Download the image above with the unique watermark.\n"
+            "2) Open a private chat with customer ({customer_ref}).\n"
+            "3) Send the media as \"one-time view\" as shown below.\n"
+            "4) Two screenshots for step 3 are sent below."
         ),
+        "send_art_controls": "Use the buttons below for next actions.",
         "send_art_uploaded_notify_customer": (
             "Order #{order_id}: artist uploaded work to bot.\n"
             "Total uploaded files: {count}."
         ),
-        "report_ask_target": "Enter TG ID of user you want to report:",
-        "report_target_id_number": "TG ID must be numeric.",
-        "report_ask_order_id": "Provide order ID (or 0 if report is not tied to order):",
-        "report_order_number_or_zero": "Order ID must be numeric or 0.",
-        "report_ask_reason": "Describe reason of complaint:",
+        "report_ask_target_username": "Enter user username in format @username you want to report.",
+        "report_target_username_invalid": "Invalid format. Example: @artist_name",
+        "report_target_self_forbidden": "You cannot send report against yourself.",
+        "report_ask_order_pick": "Choose the order related to the complaint:",
+        "report_order_pick_button": "Order #{order_id} - {title}",
+        "report_order_pick_none": "Not related to any order",
+        "report_order_pick_invalid": "This order is not available for selection.",
+        "report_use_buttons_for_order": "Please choose order with buttons below.",
+        "report_ask_reason": (
+            "Describe issue clearly.\n"
+            "Example: \"Artist sent a wrong file and refuses to fix it\"."
+        ),
         "report_reason_short": "Please describe issue in more detail (min 8 characters).",
-        "report_target_not_found": "User with this TG ID was not found in system.",
+        "report_target_not_found": "User with this username was not found in system.",
         "report_created": "Report #{report_id} created. Admin will review within 7 days.",
         "search_no_results": "No artists found.",
         "search_results_title": "Found artists:",
@@ -1034,7 +1291,8 @@ def tr(key: str, language: str = DEFAULT_LANGUAGE, **kwargs: object) -> str:
     if template is None:
         template = TRANSLATIONS[DEFAULT_LANGUAGE].get(key, key)
     if kwargs:
-        return template.format(**kwargs)
+        safe_kwargs = {name: html.escape(str(value), quote=False) for name, value in kwargs.items()}
+        return template.format(**safe_kwargs)
     return template
 
 

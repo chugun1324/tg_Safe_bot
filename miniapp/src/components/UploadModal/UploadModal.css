@@ -1,0 +1,84 @@
+.upload-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 16, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+
+.upload-modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-card);
+  border-radius: 24px 24px 0 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.upload-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.upload-modal-dropzone {
+  height: 160px;
+  border-radius: 16px;
+  border: 1.5px dashed var(--border-color);
+  background-color: var(--bg-elevated);
+  background-size: cover;
+  background-position: center;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.upload-modal-input,
+.upload-modal-textarea {
+  width: 100%;
+  resize: none;
+}
+
+.upload-modal-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.upload-modal-submit {
+  border: none;
+  border-radius: 14px;
+  padding: 13px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  background: var(--accent-gradient);
+  cursor: pointer;
+}
+
+.upload-modal-submit:disabled {
+  opacity: 0.6;
+}

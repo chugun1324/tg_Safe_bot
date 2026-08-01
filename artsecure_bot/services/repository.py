@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,6 +14,7 @@ from artsecure_bot.models import (
     Order,
     OrderStatus,
     PaymentStatus,
+    Portfolio,
     Report,
     User,
     UserLocale,
@@ -97,6 +100,35 @@ async def search_artists(session: AsyncSession, query_text: str) -> list[User]:
     )
     rows = await session.scalars(query)
     return list(rows)
+
+
+async def get_next_available_artist(session: AsyncSession) -> User | None:
+    """Get next available artist using round-robin strategy.
+
+    Returns the artist who:
+    - Has role ARTIST
+    - Is not banned
+    - Has is_available = True
+    - Has profile_visible = True
+    - Has the oldest last_offered_at (or NULL, which comes first)
+    """
+    query = (
+        select(User)
+        .where(User.role == UserRole.ARTIST)
+        .where(User.is_banned == False)
+        .where(User.is_available == True)
+        .where(User.profile_visible == True)
+        .order_by(User.last_offered_at.asc().nulls_first())
+        .limit(1)
+    )
+    artist = await session.scalar(query)
+
+    if artist is not None:
+        # Update last_offered_at to mark this artist as recently offered
+        artist.last_offered_at = datetime.now(timezone.utc)
+        await session.flush()
+
+    return artist
 
 
 async def create_order(
@@ -312,3 +344,97 @@ async def get_stats(session: AsyncSession) -> dict[str, int]:
         "disputed_orders": int(disputed_orders),
         "gross_rub": int(gross),
     }
+
+
+async def get_portfolio_items(session: AsyncSession, artist_id: int) -> list[Portfolio]:
+    """Get all portfolio items for an artist, ordered by display_order."""
+    query = (
+        select(Portfolio)
+        .where(Portfolio.artist_id == artist_id)
+        .order_by(Portfolio.display_order.asc(), Portfolio.created_at.desc())
+    )
+    rows = await session.scalars(query)
+    return list(rows)
+
+
+async def count_completed_orders_for_user(session: AsyncSession, user_id: int, role: UserRole) -> int:
+    """Count completed orders for a user, using an explicit query instead of
+    lazy-loading the `customer_orders`/`artist_orders` relationships (which
+    raises MissingGreenlet under AsyncSession when accessed outside of a
+    selectinload/eager context)."""
+    column = Order.artist_id if role == UserRole.ARTIST else Order.customer_id
+    total = await session.scalar(
+        select(func.count(Order.id)).where(column == user_id).where(Order.status == OrderStatus.COMPLETED)
+    ) or 0
+    return int(total)
+
+
+async def update_user_profile(
+    session: AsyncSession,
+    user: User,
+    *,
+    nickname: str | None = None,
+    bio: str | None = ...,
+) -> User:
+    """Update editable profile fields. `bio=None` clears it; omit (default `...`) to leave unchanged."""
+    if nickname is not None:
+        user.nickname = nickname
+    if bio is not ...:
+        user.bio = bio
+    await session.flush()
+    return user
+
+
+async def create_portfolio_item(
+    session: AsyncSession,
+    artist_id: int,
+    title: str,
+    description: str | None = None,
+    image_path: str | None = None,
+    file_id: str | None = None,
+) -> Portfolio:
+    max_order = await session.scalar(
+        select(func.max(Portfolio.display_order)).where(Portfolio.artist_id == artist_id)
+    )
+    next_order = (max_order + 1) if max_order is not None else 0
+    item = Portfolio(
+        artist_id=artist_id,
+        title=title,
+        description=description,
+        image_path=image_path,
+        file_id=file_id,
+        display_order=next_order,
+    )
+    session.add(item)
+    await session.flush()
+    return item
+
+
+async def get_portfolio_item_by_id(session: AsyncSession, item_id: int) -> Portfolio | None:
+    query = select(Portfolio).where(Portfolio.id == item_id)
+    return await session.scalar(query)
+
+
+async def update_portfolio_item(
+    session: AsyncSession,
+    item: Portfolio,
+    *,
+    title: str | None = None,
+    description: str | None = ...,
+) -> Portfolio:
+    if title is not None:
+        item.title = title
+    if description is not ...:
+        item.description = description
+    await session.flush()
+    return item
+
+
+async def delete_portfolio_item(session: AsyncSession, item: Portfolio) -> None:
+    await session.delete(item)
+    await session.flush()
+
+
+async def reorder_portfolio_item(session: AsyncSession, item: Portfolio, new_order: int) -> None:
+    item.display_order = new_order
+    await session.flush()

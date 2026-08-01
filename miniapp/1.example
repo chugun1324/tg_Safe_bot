@@ -1,0 +1,9 @@
+# Base URL for API calls from the browser. Leave EMPTY for local dev — requests
+# go out as relative paths (/api/..., /media/...) and vite.config.ts proxies them
+# to VITE_API_PROXY_TARGET, so a single ngrok/cloudflared tunnel on the Vite port
+# covers both frontend and API with no CORS setup needed.
+VITE_API_BASE_URL=
+
+# Where the vite dev server proxies /api and /media to (the bot's aiohttp server,
+# WEBAPP_HOST:WEBAPP_PORT from the bot's own .env). Not used in production builds.
+VITE_API_PROXY_TARGET=http://localhost:8000

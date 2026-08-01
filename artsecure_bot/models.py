@@ -64,6 +64,12 @@ class User(Base):
     wallet_address: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True)
+    profile_visible: Mapped[bool] = mapped_column(Boolean, default=True)
+    completed_orders_count: Mapped[int] = mapped_column(Integer, default=0)
+    rating: Mapped[int] = mapped_column(Integer, default=0)
+    last_offered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -74,6 +80,7 @@ class User(Base):
     artist_orders: Mapped[list[Order]] = relationship(
         "Order", back_populates="artist", foreign_keys="Order.artist_id"
     )
+    portfolio_items: Mapped[list[Portfolio]] = relationship("Portfolio", back_populates="artist")
 
 
 class Order(Base):
@@ -223,3 +230,25 @@ class UserLocale(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+
+class Portfolio(Base):
+    __tablename__ = "portfolio"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    artist: Mapped[User] = relationship("User", back_populates="portfolio_items")

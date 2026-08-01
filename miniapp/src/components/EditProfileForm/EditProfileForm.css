@@ -1,0 +1,67 @@
+.edit-profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  margin: 0 16px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.edit-profile-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.edit-profile-input,
+.edit-profile-textarea {
+  width: 100%;
+  resize: none;
+}
+
+.edit-profile-counter {
+  align-self: flex-end;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.edit-profile-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.edit-profile-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.edit-profile-cancel,
+.edit-profile-save {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 11px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.edit-profile-cancel {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.edit-profile-save {
+  background: var(--accent-gradient);
+  color: #fff;
+}
+
+.edit-profile-save:disabled,
+.edit-profile-cancel:disabled {
+  opacity: 0.6;
+}

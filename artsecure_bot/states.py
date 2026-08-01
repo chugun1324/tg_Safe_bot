@@ -2,21 +2,21 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class RegistrationState(StatesGroup):
-    waiting_nickname = State()
-    waiting_contact = State()
     waiting_role = State()
 
 
 class CreateOrderState(StatesGroup):
+    waiting_search_type = State()
     waiting_artist_username = State()
+    waiting_artist_confirmation = State()
     waiting_currency = State()
     waiting_title = State()
     waiting_price = State()
 
 
 class ReportState(StatesGroup):
-    waiting_target_tg_id = State()
-    waiting_order_id = State()
+    waiting_target_username = State()
+    waiting_order_pick = State()
     waiting_reason = State()
 
 
@@ -46,3 +46,11 @@ class AdminState(StatesGroup):
 
 class WalletState(StatesGroup):
     waiting_address = State()
+
+
+class EditProfileState(StatesGroup):
+    waiting_bio = State()
+
+
+class ProfileState(StatesGroup):
+    viewing = State()

@@ -16,10 +16,9 @@ Telegram-бот для безопасной передачи заказных а
   - `/release <order_id>` — релиз средств исполнителю с комиссией.
 - Споры `/dispute <order_id>` и админ-решение `/resolve <id> <refund|release>`.
 - Жалобы `/report`.
-- Генерация NDA PDF `/nda <order_id>` (ReportLab).
 - Relay-чат внутри заказа `/relay <order_id>`, выход `/leave_relay`.
 - Принудительное закрытие заказа `/force_close <order_id>`.
-- Админ-функции: `/admin_stats`, `/ban`, `/unban`.
+- Админ-функции: `/admin`, `/ban`, `/unban`.
 - Rate limiting middleware.
 
 ## Стек
@@ -38,7 +37,7 @@ Telegram-бот для безопасной передачи заказных а
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
+pip install -f requements.txt
 ```
 
 2. Создать env:
@@ -50,7 +49,8 @@ cp .env.example .env
 3. Заполнить в `.env` минимум:
 
 - `BOT_TOKEN`
-- `ADMIN_IDS` (через запятую)
+- `ADMIN_IDS` (через запятую) 
+- `все другие данныеы` 
 
 4. Запустить бота:
 
@@ -68,7 +68,7 @@ artsecure-bot
 2. Аккаунт B: `/start` → роль `Исполнитель`.
 3. A: `/search` чтобы найти B, затем `/create` и указать TG ID B.
 4. B: принять заявку кнопкой `Принять`.
-5. B: `/send_art` → `Предпросмотр` и отправить картинку.
+5. B: `/send_art` → `1 : 1 медиа ` и отправить картинку.
 6. A: `/pay <order_id>`.
 7. B: `/send_art` → `Финал`.
 8. A: `/release <order_id>`.
@@ -85,8 +85,3 @@ pytest
 - watermark-сервис,
 - генерация NDA PDF,
 - расчет комиссии/выплаты.
-
-## Важно
-
-- Платежи реализованы как mock escrow (без реальной интеграции Telegram Stars/TON в MVP).
-- Disappearing media нельзя принудительно включить ботом для личной переписки пользователей, поэтому бот выдает инструкции и отправляет защищенные медиасообщения (`protect_content`).

@@ -4,3 +4,7 @@ __pycache__/
 .env
 artsecure.db
 *.pyc
+artsecure_bot/assets/portfolio_uploads/*
+!artsecure_bot/assets/portfolio_uploads/.gitkeep
+.dev-logs/
+.dev-pids/

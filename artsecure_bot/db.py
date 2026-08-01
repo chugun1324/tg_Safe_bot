@@ -48,11 +48,28 @@ async def init_db(database_url: str) -> None:
             users_columns = {row[1] for row in users_result.fetchall()}
             if "wallet_address" not in users_columns:
                 await conn.execute(text("ALTER TABLE users ADD COLUMN wallet_address VARCHAR(128)"))
+            if "bio" not in users_columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN bio TEXT"))
+            if "is_available" not in users_columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN is_available BOOLEAN DEFAULT 1"))
+            if "profile_visible" not in users_columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN profile_visible BOOLEAN DEFAULT 1"))
+            if "completed_orders_count" not in users_columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN completed_orders_count INTEGER DEFAULT 0"))
+            if "rating" not in users_columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN rating INTEGER DEFAULT 0"))
+            if "last_offered_at" not in users_columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN last_offered_at DATETIME"))
 
             invoice_result = await conn.execute(text("PRAGMA table_info(escrow_invoices)"))
             invoice_columns = {row[1] for row in invoice_result.fetchall()}
             if "payer_wallet_address" not in invoice_columns:
                 await conn.execute(text("ALTER TABLE escrow_invoices ADD COLUMN payer_wallet_address VARCHAR(128)"))
+
+            portfolio_result = await conn.execute(text("PRAGMA table_info(portfolio)"))
+            portfolio_columns = {row[1] for row in portfolio_result.fetchall()}
+            if portfolio_columns and "image_path" not in portfolio_columns:
+                await conn.execute(text("ALTER TABLE portfolio ADD COLUMN image_path VARCHAR(500)"))
         except Exception:
             # Non-SQLite engines should be migrated separately.
             pass
